@@ -1,0 +1,12 @@
+node_modules/
+.nuxt/
+.output/
+.vercel/
+.env
+.env.*
+!.env.demo
+output/
+*.log
+.playwright-cli/
+.npm-cache/
+.cache/

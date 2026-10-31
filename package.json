@@ -1,0 +1,32 @@
+{
+  "name": "murgik",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --dotenv .env --dotenv .env.demo --host 127.0.0.1",
+    "dev:ai": "nuxt dev --dotenv .env --host 127.0.0.1",
+    "build": "nuxt build --dotenv .env.demo",
+    "preview": "node scripts/start.mjs",
+    "preview:ai": "node --env-file=.env scripts/start.mjs --ai",
+    "prepare": "nuxt prepare --dotenv .env.demo",
+    "typecheck": "nuxt typecheck --dotenv .env.demo",
+    "test": "vitest run",
+    "security:check": "node scripts/security-check.mjs"
+  },
+  "dependencies": {
+    "@nuxt/ui": "^4.0.0",
+    "nuxt": "^4.6.3",
+    "tailwindcss": "^4.0.0",
+    "vue": "^3.5.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.149",
+    "@playwright/cli": "^0.1.22",
+    "@types/node": "^24.0.0",
+    "fengari": "^0.1.5",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.12",
+    "vue-tsc": "^3.0.0"
+  }
+}

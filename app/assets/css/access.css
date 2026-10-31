@@ -1,0 +1,21 @@
+.access-main { min-height: calc(100svh - 86px); padding: 40px 20px; display: grid; place-items: center; }
+.access-panel { width: min(100%, 440px); padding: 36px 38px 28px; text-align: center; border: 1px solid #d5bc8180; border-radius: 10px; background: linear-gradient(145deg, #263d46f2, #152833ed); box-shadow: 0 25px 90px #07131b8c, inset 0 0 45px #c8b27b05; }
+.access-rune { display: grid; place-items: center; margin: 0 auto 22px; width: 54px; height: 62px; font: 46px Georgia, serif; color: var(--gold-light); border: 1px solid #d5bc815e; clip-path: polygon(50% 0,100% 22%,100% 78%,50% 100%,0 78%,0 22%); background: #c7ab751c; }
+.access-panel h1 { font: 36px/1.2 Georgia, serif; color: #f1e7cb; margin: 17px 0; }
+.access-panel > p { color: #b9cbc2; line-height: 1.8; font-size: 14px; }
+.access-panel form { margin-top: 29px; text-align: left; }
+.access-panel label { display: block; font-size: 12px; color: #e5d3ac; margin-bottom: 9px; }
+.access-panel input { display: block; width: 100%; padding: 14px; font-size: 16px; background: #0d2028a8; border: 1px solid #b6c8b64d; border-radius: 4px; color: #f5efdf; outline: none; }
+.access-panel input:focus-visible { border-color: var(--gold-light); box-shadow: 0 0 0 2px #e5ca862b; }
+.access-panel .gold-button { width: 100%; margin-top: 19px; }
+.access-panel .access-error { color: #f1bdab; font-size: 12px; line-height: 1.6; margin-top: 12px; }
+.access-panel > small { display: block; color: #9db4a9; font-size: 10px; margin-top: 25px; }
+.access-logout { font-size: 11px; padding: 8px; white-space: nowrap; }
+.mobile-access-logout { display: none; }
+@media (max-width: 760px) {
+  .access-main { min-height: calc(100svh - 78px); padding: 24px 16px; }
+  .access-panel { padding: 28px 24px; }
+  .access-panel h1 { font-size: 31px; }
+  .desktop-access-logout { display: none; }
+  .mobile-access-logout { display: flex; margin-top: 14px; border-top: 1px solid #d5bc8133; width: 100%; padding-top: 15px; }
+}

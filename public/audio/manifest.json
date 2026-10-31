@@ -1,0 +1,231 @@
+{
+  "downloaded": "2026-10-31",
+  "sources": {
+    "tiny": {
+      "title": "Fantasy Sound Effects (Tinysized SFX)",
+      "author": "Vehicle (Jan Schupke)",
+      "page": "https://opengameart.org/content/fantasy-sound-effects-tinysized-sfx",
+      "download": "https://opengameart.org/sites/default/files/tinysized.zip",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "snapshot": "tinysized.html"
+    },
+    "rubber": {
+      "title": "100 CC0 SFX",
+      "author": "rubberduck",
+      "page": "https://opengameart.org/content/100-cc0-sfx",
+      "download": "https://opengameart.org/sites/default/files/100-CC0-SFX_0.zip",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "snapshot": "100-cc0-sfx.html"
+    },
+    "magic": {
+      "title": "Magic SFX Sample",
+      "author": "ViRiX Dreamcore (David Mckee)",
+      "page": "https://opengameart.org/content/magic-sfx-sample",
+      "download": "https://opengameart.org/sites/default/files/Magic%20SFX%20Preview%20Pack.zip",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "snapshot": "magic-sfx-sample.html"
+    },
+    "ghost": {
+      "title": "Ghost",
+      "author": "Ogrebane",
+      "page": "https://opengameart.org/content/ghost",
+      "download": "https://opengameart.org/sites/default/files/ghost.wav",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "snapshot": "ghost.html"
+    },
+    "victory": {
+      "title": "Hyper Ultra Fanfare",
+      "author": "Zane Little Music",
+      "page": "https://opengameart.org/content/hyper-ultra-fanfare",
+      "download": "https://opengameart.org/sites/default/files/sboe.mp3",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "snapshot": "hyper-ultra-fanfare.html"
+    },
+    "defeat": {
+      "title": "Game Over",
+      "author": "Samza",
+      "page": "https://opengameart.org/content/game-over-2",
+      "download": "https://opengameart.org/sites/default/files/Game%20over.mp3",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "snapshot": "game-over-2.html"
+    }
+  },
+  "files": [
+    {
+      "file": "card-draw.ogg",
+      "original": "paper_01.ogg",
+      "sourceId": "rubber",
+      "purpose": "Card drawing paper",
+      "bytes": 25529,
+      "durationSeconds": 0.421,
+      "sha256": "b2b2b55e44761c7a45283bce0196f41f72207180fb08c970d7dcf93b705d280c",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "card-slide.ogg",
+      "original": "paper_02.ogg",
+      "sourceId": "rubber",
+      "purpose": "Card playing paper",
+      "bytes": 27205,
+      "durationSeconds": 0.548,
+      "sha256": "4d0c68b367bd3fbdf9817e764908e5524b2cad6536eb0911fc74f6ab4f60c50a",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "whoosh-swift.wav",
+      "original": "tube-plastic-whoosh-01.wav",
+      "sourceId": "tiny",
+      "purpose": "Fast attack whoosh",
+      "bytes": 59568,
+      "durationSeconds": 0.337,
+      "sha256": "6bf539745db12b4b546bb8bb1ab2f75ccf403db80c07fc8f473fa288d0d428b9",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "whoosh-soft.wav",
+      "original": "tube-plastic-whoosh-02.wav",
+      "sourceId": "tiny",
+      "purpose": "Turn transition / card play whoosh",
+      "bytes": 70876,
+      "durationSeconds": 0.401,
+      "sha256": "2ba001b889f1465d949b5531e7c9f61425a0f81d2a40febe3bdb4e449e99c190",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "impact-body.ogg",
+      "original": "hit_01.ogg",
+      "sourceId": "rubber",
+      "purpose": "Damage impact",
+      "bytes": 14762,
+      "durationSeconds": 0.265,
+      "sha256": "fee785537678a33d150310e8ae75eeaa439b0e1e9aa55aef19651d12013a067f",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "impact-sword.wav",
+      "original": "sword-clash-03.wav",
+      "sourceId": "tiny",
+      "purpose": "Attack / block metallic impact",
+      "bytes": 140932,
+      "durationSeconds": 0.798,
+      "sha256": "2fb00a674fc987ef8aeca008c6b3987e0df9b0c11a81fc892ade97c59534b188",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "ui-hover.wav",
+      "original": "scissors-close-01.wav",
+      "sourceId": "tiny",
+      "purpose": "Quiet trimmed UI hover",
+      "bytes": 31964,
+      "durationSeconds": 0.18,
+      "sha256": "9b40bb3cb4e5ebc0acf74e3cee3d8bb88f501aa4c65646c469711be35c030e96",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "ui-select.ogg",
+      "original": "switch_01.ogg",
+      "sourceId": "rubber",
+      "purpose": "Quiet UI selection",
+      "bytes": 12076,
+      "durationSeconds": 0.231,
+      "sha256": "a24004ad0adbc08571324456963533c496bd27cf4808b40cb90833dc06b95792",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "reveal-bell.ogg",
+      "original": "bell_03.ogg",
+      "sourceId": "rubber",
+      "purpose": "Soft reveal / turn accent",
+      "bytes": 47656,
+      "durationSeconds": 1.783,
+      "sha256": "9440896c5ffbc85d045b88953057d12019ddbf052f3694615216d83161a9e2d9",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "magic-fire.wav",
+      "original": "Fire impact 1.wav",
+      "sourceId": "magic",
+      "purpose": "Card play magical impact / strong forge reveal",
+      "bytes": 1127274,
+      "durationSeconds": 6.389,
+      "sha256": "0fa4afbf37b12dc6c54f33cdded356b5f344a0156b84af94b70d843886c1efad",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "magic-heal.wav",
+      "original": "Healing Full.wav",
+      "sourceId": "magic",
+      "purpose": "Forge magical energy build / victory accent",
+      "bytes": 693058,
+      "durationSeconds": 3.928,
+      "sha256": "ad60bc48be1ac7451771505c0e169590af18241d38ff79b93aa6e5f186b1e54b",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "magic-ice.wav",
+      "original": "Ice attack 2.wav",
+      "sourceId": "magic",
+      "purpose": "Short icy spell / death sparkle",
+      "bytes": 325838,
+      "durationSeconds": 1.846,
+      "sha256": "148e143241e6516c7229c366bb5574a29d556179ee2021c7e40bd3d5e5066311",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "magic-wind.wav",
+      "original": "Wind effects 5.wav",
+      "sourceId": "magic",
+      "purpose": "Magical whoosh / forging build",
+      "bytes": 306334,
+      "durationSeconds": 1.736,
+      "sha256": "37424e27cceca69c0bf48a40465a8d7db2889816c67073378668af3317bb974a",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "magic-shimmer.wav",
+      "original": "Misc 02.wav",
+      "sourceId": "magic",
+      "purpose": "Subtle spell / reveal flourish",
+      "bytes": 204566,
+      "durationSeconds": 1.159,
+      "sha256": "21728538d4220720df0beceeb3d39da60c0b0ade9f6296ec493982755e9fe272",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "death-dissolve.wav",
+      "original": "ghost.wav",
+      "sourceId": "ghost",
+      "purpose": "Shortened magical death dissolve",
+      "bytes": 861816,
+      "durationSeconds": 3.25,
+      "sha256": "d3d2db1f5cf0d00017c9415099bedd6cca878ef8782a751460d07ed14c2ab9d6",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "victory.mp3",
+      "original": "sboe.mp3",
+      "sourceId": "victory",
+      "purpose": "Short dramatic victory signature",
+      "bytes": 246703,
+      "durationSeconds": null,
+      "sha256": "be99d3a56306a39037a79855b8dc98b91dd9f2095ae2409ba366b813b3a024f8",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    },
+    {
+      "file": "defeat.mp3",
+      "original": "Game over.mp3",
+      "sourceId": "defeat",
+      "purpose": "Opening of dramatic defeat signature",
+      "bytes": 476020,
+      "durationSeconds": null,
+      "sha256": "fdd0a0e42f8423745830bb96f2aa9bea51e0ae7f4c48f6ae3a06b1c955a81b3d",
+      "modification": "Unmodified source audio, renamed only. Runtime cues layer, trim, fade, filter and adjust pitch/gain."
+    }
+  ]
+}
