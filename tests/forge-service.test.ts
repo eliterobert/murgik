@@ -21,7 +21,7 @@ describe('server Forge transaction', () => {
     const result = await generateCard(request(), 'ai')
     expect(result.card).toEqual(card); expect(result.mode).toBe('ai')
     const body = JSON.parse(network.mock.calls[0]![1].body)
-    expect(body.text.format.strict).toBe(true); expect(body.store).toBe(false); expect(body.max_output_tokens).toBe(1200)
+    expect(body.text.format.strict).toBe(true); expect(body.store).toBe(false); expect(body.max_output_tokens).toBe(4096)
   })
   it('accepts a novel combination of implemented mechanics and plays the generated card', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-only-not-a-real-key')

@@ -16,7 +16,7 @@ export default defineNuxtConfig({
   vite: { envDir: false },
   colorMode: { preference: 'dark' },
   typescript: { strict: true },
-  nitro: { preset: process.env.VERCEL ? 'vercel' : 'node-server', vercel: { functions: { maxDuration: 60 } } },
+  nitro: { preset: process.env.VERCEL ? 'vercel' : 'node-server', vercel: { functions: { maxDuration: 300 } } },
   routeRules: {
     '/**': { headers: { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' } },
     '/api/**': { headers: { 'Cache-Control': 'no-store' } },

@@ -87,11 +87,11 @@ describe('persistent public Forge, production Lua scripts', () => {
     await expect(store.reserve('a',request())).rejects.toThrow('tio')
     expect((await store.status('a')).globalRemaining).toBe(40)
   })
-  it('fails closed to demo before reservation when storage is unavailable', async () => {
+  it('fails closed with an explicit error before reservation when storage is unavailable', async () => {
     const { redis, store } = setup(); redis.available = false
     const generate = vi.fn(async (r, mode) => ({ ...demoForge(r.prompt), mode })), challenge = vi.fn()
-    expect((await publicForge(request(),'a','ip',store,challenge,generate)).mode).toBe('demo')
-    expect(generate).toHaveBeenCalledWith(expect.anything(),'demo'); expect(challenge).not.toHaveBeenCalled()
+    await expect(publicForge(request(),'a','ip',store,challenge,generate)).rejects.toThrow('otillgängligt')
+    expect(generate).not.toHaveBeenCalled(); expect(challenge).not.toHaveBeenCalled()
   })
   it('does not call OpenAI when reservation confirmation is lost', async () => {
     const { store } = setup(), generate = vi.fn()
@@ -114,11 +114,11 @@ describe('persistent public Forge, production Lua scripts', () => {
     await expect(publicForge(r,'a','ip',store,async()=>{},generate)).rejects.toThrow('misslyckades')
     expect((await store.status('a')).globalRemaining).toBe(49); expect((await store.status('a')).sessionRemaining).toBe(10)
   })
-  it('uses local demo after a budget is exhausted, making no paid attempt', async () => {
+  it('reports exhausted public budget without silently substituting a demo card', async () => {
     const { redis, store } = setup(); redis.hashes.get(LEDGER)!.set('attempts','50')
     const generate = vi.fn(async (r, mode) => ({ ...demoForge(r.prompt), mode }))
-    expect((await publicForge(request(),'a','ip',store,async()=>{},generate)).mode).toBe('demo')
-    expect(generate).toHaveBeenCalledWith(expect.anything(),'demo')
+    await expect(publicForge(request(),'a','ip',store,async()=>{},generate)).rejects.toThrow('kvoten är slut')
+    expect(generate).not.toHaveBeenCalled()
   })
 })
 describe('anonymous session and AI configuration', () => {
@@ -133,7 +133,7 @@ describe('anonymous session and AI configuration', () => {
     const env = { OPENAI_API_KEY: 'test', UPSTASH_REDIS_REST_URL: 'https://example.test', UPSTASH_REDIS_REST_TOKEN: 'test', MURGIK_SESSION_SECRET: 'test-secret-at-least-thirty-two-characters', TURNSTILE_SITE_KEY: 'test-site', TURNSTILE_SECRET_KEY: 'test-secret', MURGIK_PUBLIC_ORIGIN: 'https://murgik.example' }
     expect(aiConfiguration(env).reason).toBeUndefined()
     for (const key of Object.keys(env)) expect(aiConfiguration({ ...env, [key]: undefined }).reason).toBeTruthy()
-    expect(aiConfiguration({ ...env, MURGIK_DEMO:'true' }).reason).toBeTruthy()
+    expect(aiConfiguration({ ...env, MURGIK_DEMO:'true' }).reason).toBeUndefined()
     expect(aiConfiguration({ ...env, MURGIK_PUBLIC_ORIGIN:'http://example.test' }).reason).toBeTruthy()
   })
   it('validates Turnstile success, hostname and action server-side; rejects service failures', async () => {

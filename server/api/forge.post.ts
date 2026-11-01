@@ -5,6 +5,8 @@ import { QuotaStore, redisRest } from '../utils/quota-store'
 import { publicForge } from '../utils/public-forge'
 import { accessConfiguration, privateForgeEnabled, privateForgeMode, requireAccessCsrf } from '../utils/access'
 import { issueForgeDraft } from '../utils/forge-draft'
+import { privateForge } from '../utils/private-forge'
+import type { Illustration } from '../../shared/game/art'
 
 export default defineEventHandler(async event => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -29,11 +31,16 @@ export default defineEventHandler(async event => {
   const access = requireAccessCsrf(event)
   try {
     let result
-    if (privateForgeEnabled()) {
+    let illustration: Illustration = { status: 'disabled', message: 'Generell illustration används i övningsläget eller den äldre publika grenen.' }
+    if (request.data.demo === true) result = await generateCard(request.data, 'demo')
+    else if (privateForgeEnabled()) {
       const privateMode = privateForgeMode()
-      result = { ...await generateCard(request.data, request.data.demo ? 'demo' : privateMode.mode), reason: privateMode.reason }
+      if (privateMode.mode !== 'ai') throw new ForgeError(503, privateMode.reason!)
+      const generated = await privateForge(request.data, access.id)
+      result = generated
+      illustration = generated.illustration
     }
-    else if (config.reason || request.data.demo) result = { ...await generateCard(request.data, 'demo'), reason: config.reason || 'Lokalt demoläge är valt.' }
+    else if (config.reason) throw new ForgeError(503, config.reason)
     else {
       const sid = readSession(getCookie(event, 'murgik-session'), config.secret!)
       const csrf = getHeader(event, 'x-murgik-csrf') || ''
@@ -43,7 +50,7 @@ export default defineEventHandler(async event => {
       result = await publicForge(request.data, sid, ipHash, new QuotaStore(redisRest(config.url!, config.token!)), () => verifyChallenge(request.data.challengeToken, config.origin!))
     }
     const draftToken = issueForgeDraft(result.card, request.data.matchId, request.data.requestId, access.id, accessConfiguration()!.secret)
-    return { ...result, draftToken, illustration: { status: 'disabled', message: 'Återanvänd originalillustration; motivet kan avvika från din idé.' } }
+    return { ...result, draftToken, illustration }
   } catch (error) {
     if (error instanceof ForgeError) throw createError({ statusCode: error.status, statusMessage: error.message })
     throw createError({ statusCode: 503, statusMessage: 'Smedjan kunde inte bekräfta förfrågan. Inget ytterligare AI-anrop görs.' })

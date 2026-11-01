@@ -50,7 +50,7 @@ export function requireAccessCsrf(event: H3Event) {
 /** Explicit opt-out retains the existing public Redis/Turnstile path without changing it. */
 export const privateForgeEnabled = () => !!accessConfiguration() && process.env.MURGIK_PRIVATE_FORGE !== 'false'
 export function privateForgeMode() {
-  return process.env.MURGIK_DEMO === 'true' || !process.env.OPENAI_API_KEY
-    ? { mode: 'demo' as const, reason: 'AI är inte aktiverad. Lokalt demoläge används.' }
-    : { mode: 'ai' as const }
+  return process.env.OPENAI_API_KEY?.trim()
+    ? { mode: 'ai' as const }
+    : { mode: 'unavailable' as const, reason: 'OPENAI_API_KEY saknas på servern. Konfigurera AI eller välj övningsläge uttryckligen.' }
 }

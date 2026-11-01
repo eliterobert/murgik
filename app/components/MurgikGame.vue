@@ -17,10 +17,12 @@ const props = defineProps<{ accessCsrf: string }>()
 const game = shallowRef<GameState | null>(null)
 const you = computed(() => game.value?.players.you)
 const enemy = computed(() => game.value?.players.bot)
-interface ForgeMode { mode: 'demo' | 'ai'; privateForge?: boolean; reason?: string; csrf?: string; siteKey?: string; quota?: { sessionRemaining: number; globalRemaining: number } }
+interface ForgeMode { mode: 'unavailable' | 'ai'; images?: boolean; privateForge?: boolean; reason?: string; csrf?: string; siteKey?: string; quota?: { sessionRemaining: number; globalRemaining: number } }
 // Bootstrap the HttpOnly session in the browser; an internal SSR fetch would lose Set-Cookie.
-const { data: modeData } = await useFetch<ForgeMode>('/api/mode', { server: false })
-const mode = computed(() => modeData.value?.mode ?? 'demo')
+const { data: modeData, error: modeError } = await useFetch<ForgeMode>('/api/mode', { server: false, retry: 0 })
+const demoRequested = ref(false)
+const mode = computed(() => demoRequested.value ? 'demo' : modeData.value?.mode ?? 'unavailable')
+const modeReason = computed(() => modeData.value?.reason || (modeError.value ? 'AI-status kunde inte läsas. Försök ladda om sidan eller välj övningsläge uttryckligen.' : 'AI-status laddas.'))
 const tutorial = ref(false)
 const libraryOpen = ref(false)
 const deckChoice = ref<DeckChoice>('random')
@@ -64,7 +66,8 @@ function hoverSound(event: PointerEvent | FocusEvent) {
   playSound('hover')
 }
 const { effects, turnBanner, botCard, botMessage, capture, clear: clearEffects } = useBattleEffects()
-const { remember: rememberArt } = useIllustrations()
+const { remember: rememberArt, clear: clearArt } = useIllustrations()
+watch(previewCard, card => { if (card && forgeResult.value) rememberArt(card, forgeResult.value.illustration) })
 const introVisible = ref(false)
 const introSeen = ref(true)
 function dismissIntro() {
@@ -109,7 +112,7 @@ function toast(text: string) {
 }
 function start() {
   clearTimeout(timer); matchVersion.value++
-  clearEffects(); stopAudio(); playSound('turn'); playSound('draw', .1)
+  clearEffects(); clearArt(); stopAudio(); playSound('turn'); playSound('draw', .1)
   game.value = createGame(crypto.randomUUID(), Math.floor(Math.random() * 0xFFFFFFFF), { deck: deckChoice.value })
   selectedCard.value = null; selectedBlocker.value = null; attackers.value = []
   forgeResult.value = null; forgeName.value = ''; forgeTicket.value = null; forgeError.value = ''; forgeOpen.value = false; restartOpen.value = false
@@ -176,6 +179,7 @@ function openForge() {
 }
 async function forge() {
   if (!game.value || forgeResult.value || !forgeAvailable.value || forgePrompt.value.trim().length < 3) return
+  if (mode.value === 'unavailable') { forgeError.value = modeReason.value; return }
   if (mode.value === 'ai' && !modeData.value?.privateForge && !challengeToken.value) { forgeError.value = 'Bekräfta säkerhetskontrollen först.'; return }
   forgeBusy.value = true; forgeError.value = ''
   playSound('forge')
@@ -184,7 +188,7 @@ async function forge() {
   forgeTicket.value ??= { id: crypto.randomUUID(), prompt: forgePrompt.value.trim(), context: { turn: game.value.turn, life: p.life, opponentLife: game.value.players.bot.life, maxMana: p.maxMana, allies: p.board.length, enemies: game.value.players.bot.board.length } }
   try {
     const result = await $fetch<{ card: CardDraft; adjustments: string[]; mode: 'demo' | 'ai'; reason?: string; quota?: { sessionRemaining: number; globalRemaining: number }; illustration: Illustration; draftToken: string }>('/api/forge', {
-      method: 'POST', timeout: 40_000, retry: 0,
+      method: 'POST', timeout: 260_000, retry: 0,
       headers: { 'X-Murgik-CSRF': modeData.value?.csrf || '', 'X-Murgik-Access-CSRF': props.accessCsrf },
       body: { matchId: game.value.id, requestId: forgeTicket.value.id, prompt: forgeTicket.value.prompt,
         challengeToken: challengeToken.value, demo: mode.value === 'demo',
@@ -192,7 +196,7 @@ async function forge() {
     })
     await new Promise(resolve => setTimeout(resolve, 900))
     if (version !== matchVersion.value) return
-    modeData.value = { ...modeData.value, mode: result.mode, reason: result.reason, quota: result.quota ?? modeData.value?.quota }
+    if (result.mode === 'ai') modeData.value = { ...modeData.value, mode: 'ai', reason: result.reason, quota: result.quota ?? modeData.value?.quota }
     rememberArt(result.card, result.illustration)
     forgeDescription.value = forgeTicket.value.prompt
     forgeResult.value = result; forgeName.value = result.card.name; forgeTicket.value = null; forgePrompt.value = ''
@@ -201,7 +205,7 @@ async function forge() {
     stopSound('forge')
     const e = error as { statusCode?: number; data?: { statusMessage?: string } }
     forgeError.value = e.data?.statusMessage ?? (modeData.value?.privateForge ? 'Kontakten med smedjan bröts. Inget automatiskt återförsök görs. Ett nytt försök kan ge ett nytt AI-anrop.' : 'Kontakten med smedjan bröts. Försök igen med samma beskrivning; samma förfrågan kostar aldrig dubbelt.')
-    if (e.statusCode && ![409, 503].includes(e.statusCode)) forgeTicket.value = null
+    if (modeData.value?.privateForge) forgeTicket.value = null // A new private attempt requires another explicit click.
   } finally { forgeBusy.value = false; challengeToken.value = ''; challengeVersion.value++ }
 }
 async function confirmForge() {
@@ -260,13 +264,13 @@ watch(() => you.value?.life, (life, old) => { if (life !== undefined && old !== 
       <header class="site-header">
         <a href="/" class="brand" :aria-label="game ? 'Murgik, starta ny match' : 'Murgik startsida'" @click.prevent="game ? restartOpen = true : null"><span class="brand-rune">ᛗ</span><span>MURGIK<small>SKRIV DITT ÖDE</small></span></a>
         <div class="header-center"><span class="live-dot"/> {{ game ? 'ASKLUNDENS ARENA' : 'EN NY SORTS KORTDUELL' }}</div>
-        <div class="header-actions"><span class="mode-badge" :class="mode">{{ mode === 'demo' ? 'DEMO · LOKALT SMIDE' : 'OPENAI · AI-SMIDE' }}</span><button class="rules-button" :disabled="!clientReady" @click="tutorial = true"><RuneIcon name="book" :size="23"/> SPELREGLER</button><button class="icon-button sound-button" :aria-label="muted ? 'Aktivera ljud' : 'Stäng av ljud'" :aria-pressed="!muted" @click="toggleSound"><RuneIcon :name="muted ? 'muted' : 'sound'" :size="21"/></button><UPopover :content="{ align: 'end', sideOffset: 12 }"><button class="icon-button sound-settings-button" aria-label="Ljudinställningar"><RuneIcon name="chevron" :size="12"/></button><template #content><section class="sound-settings" aria-label="Ljudinställningar"><h3>Ljud &amp; volym</h3><label for="master-volume">Master <span>{{ masterVolume }}%</span></label><input id="master-volume" v-model.number="masterVolume" type="range" min="0" max="100" step="1"/><label for="effects-volume">Ljudeffekter <span>{{ effectsVolume }}%</span></label><input id="effects-volume" v-model.number="effectsVolume" type="range" min="0" max="100" step="1"/><p>{{ audioUnavailable ? 'Ett ljud kunde inte laddas. Du kan fortsätta spela.' : muted ? 'Ljudet är avstängt. Slå på det med högtalaren.' : 'Lokala fantasy- och foleyljud. Inställningarna sparas.' }}</p><a href="/audio/LICENSES.md" target="_blank" rel="noopener">Ljudlicenser &amp; skapare ↗</a><AccessLogout class="mobile-access-logout" :csrf="accessCsrf"/></section></template></UPopover><button v-if="game" class="icon-button" aria-label="Starta om matchen" :disabled="forgeBusy" @click="restartOpen = true"><RuneIcon name="restart" :size="19"/></button><AccessLogout class="desktop-access-logout" :csrf="accessCsrf"/></div>
+        <div class="header-actions"><span class="mode-badge" :class="mode">{{ mode === 'demo' ? 'DEMO · UTAN AI' : mode === 'ai' ? 'OPENAI · AI-SMIDE' : 'AI · EJ TILLGÄNGLIG' }}</span><button class="rules-button" :disabled="!clientReady" @click="tutorial = true"><RuneIcon name="book" :size="23"/> SPELREGLER</button><button class="icon-button sound-button" :aria-label="muted ? 'Aktivera ljud' : 'Stäng av ljud'" :aria-pressed="!muted" @click="toggleSound"><RuneIcon :name="muted ? 'muted' : 'sound'" :size="21"/></button><UPopover :content="{ align: 'end', sideOffset: 12 }"><button class="icon-button sound-settings-button" aria-label="Ljudinställningar"><RuneIcon name="chevron" :size="12"/></button><template #content><section class="sound-settings" aria-label="Ljudinställningar"><h3>Ljud &amp; volym</h3><label for="master-volume">Master <span>{{ masterVolume }}%</span></label><input id="master-volume" v-model.number="masterVolume" type="range" min="0" max="100" step="1"/><label for="effects-volume">Ljudeffekter <span>{{ effectsVolume }}%</span></label><input id="effects-volume" v-model.number="effectsVolume" type="range" min="0" max="100" step="1"/><p>{{ audioUnavailable ? 'Ett ljud kunde inte laddas. Du kan fortsätta spela.' : muted ? 'Ljudet är avstängt. Slå på det med högtalaren.' : 'Lokala fantasy- och foleyljud. Inställningarna sparas.' }}</p><a href="/audio/LICENSES.md" target="_blank" rel="noopener">Ljudlicenser &amp; skapare ↗</a><AccessLogout class="mobile-access-logout" :csrf="accessCsrf"/></section></template></UPopover><button v-if="game" class="icon-button" aria-label="Starta om matchen" :disabled="forgeBusy" @click="restartOpen = true"><RuneIcon name="restart" :size="19"/></button><AccessLogout class="desktop-access-logout" :csrf="accessCsrf"/></div>
       </header>
 
       <main v-if="!game" class="landing">
         <div class="landing-copy"><div class="eyebrow"><span/> TAKTIK MÖTER FANTASI <span/></div><h1>Världen är skriven.<br><em>Ändra den.</em></h1><p>En tanke. En gnista. Ett kort som aldrig funnits.<br>Smid din egen magi och vänd duellen.</p><DeckSelection v-model="deckChoice"/><div class="landing-cta"><button class="gold-button" :disabled="!clientReady" @click="start">Påbörja duell <RuneIcon name="arrow" :size="20"/></button><button class="text-button" @click="tutorial = true"><RuneIcon name="book" :size="17"/> Så spelar du</button><button class="text-button" @click="libraryOpen = true"><RuneIcon name="book" :size="17"/> Kortbibliotek</button></div><div class="landing-facts"><span><b>20</b> liv att försvara</span><span><b>3</b> kort att smida</span><span><b>∞</b> idéer att utforska</span></div></div>
         <div class="landing-showcase"><div class="showcase-ring"/><div class="floating-card left"><GameCard :card="catalog[1]!" display-only/></div><div class="floating-card right"><GameCard :card="catalog[3]!" display-only/></div><div class="floating-card front"><GameCard :card="{ ...catalog[10]!, name: 'Smedjans askdrake', forged: true, id: 'showcase' }" display-only/></div><div class="showcase-caption"><RuneIcon name="forge" :size="18"/><span>FÖDD UR DIN FANTASI</span></div></div>
-        <footer class="landing-footer"><span>ETT ORIGINALSPEL AV MURGIK <i>◆</i> PROOF OF CONCEPT</span><span>{{ mode === 'demo' ? 'Demoläge: fast övningskort utan fritexttolkning. Inga AI-anrop.' : 'AI skapar kort. Spelmotorn bestämmer reglerna.' }}</span></footer>
+        <footer class="landing-footer"><span>ETT ORIGINALSPEL AV MURGIK <i>◆</i> PROOF OF CONCEPT</span><span>{{ mode === 'demo' ? 'Övningsläge valt. Inga AI-anrop.' : 'AI skapar kort. Spelmotorn bestämmer reglerna.' }}</span></footer>
       </main>
 
       <main v-else class="game-layout">
@@ -296,20 +300,20 @@ watch(() => you.value?.life, (life, old) => { if (life !== undefined && old !== 
         <template #body>
           <div v-if="forgeResult && previewCard" class="forge-success">
             <div class="eyebrow">{{ forgeResult.mode === 'demo' ? 'ÖVNINGSKORT · UTAN FRITEXTTOLKNING' : 'DIN IDÉ HAR FÅTT FORM' }}</div><p class="forge-original-idea">”{{ forgeDescription }}”</p>
-            <p class="forge-art-notice">Återanvänd illustration – motivet kan avvika från din idé.</p>
+            <p class="forge-art-notice">{{ forgeResult.illustration.status === 'ready' ? 'AI-illustration skapad för din idé.' : 'En befintlig illustration används som fallback.' }}</p>
             <div class="forged-reveal"><GameCard :card="{ ...previewCard, id: 'preview', forged: true }" display-only/></div>
             <div class="forge-name-editor"><label for="forge-card-name">Kortets namn <span>{{ forgeName.length }} / {{ CARD_NAME_MAX }}</span></label><input id="forge-card-name" v-model="forgeName" :maxlength="CARD_NAME_MAX" :disabled="forgeBusy" :aria-invalid="!forgeNameValid" aria-describedby="forge-name-help" autocomplete="off"/><p id="forge-name-help" :class="{ 'error-message': !forgeNameValid }">{{ CARD_NAME_HELP }} Namnet ändras utan nytt AI-anrop.</p><button class="text-button" :disabled="forgeBusy || forgeName === forgeResult.card.name" @click="forgeName = forgeResult.card.name">Återställ föreslaget namn</button></div>
             <p class="forge-identity">{{ previewCard.flavor }}</p>
             <div class="forge-preview-facts"><span>{{ previewCard.type === 'creature' ? 'Varelse' : 'Besvärjelse' }}</span><span>{{ previewCard.cost }} mana</span><span v-if="previewCard.type === 'creature'">{{ previewCard.attack }} attack / {{ previewCard.health }} hälsa</span></div>
             <div class="forge-interpretation"><h4>Kortets faktiska effekt</h4><p>{{ cardText(previewCard) }}</p><p v-for="keyword in previewCard.keywords" :key="keyword"><b>{{ keywordNames[keyword] }}:</b> {{ keywordHelp[keyword] }}</p></div>
             <div class="balance-note"><RuneIcon name="shield" :size="17"/><div><b>Tolkning & anpassningar</b><ul><li v-for="(adjustment, index) in forgeResult.adjustments" :key="index">{{ adjustment }}</li><li v-if="!forgeResult.adjustments.length">Validerat och balanserat av Murgiks regelmotor.</li></ul></div></div>
-            <div class="art-summary"><RuneIcon name="eye" :size="17"/><span>Återanvänd originalillustration; motivet kan avvika från din idé. Ingen ny bild genereras.</span></div>
-            <p>Bekräfta för att lägga kortet i handen och använda en smidesladdning. AI-försöket räknas när förhandsvisningen skapas.</p>
+            <div class="art-summary" :role="forgeResult.illustration.status === 'failed' ? 'alert' : 'status'"><RuneIcon name="eye" :size="17"/><span>{{ forgeResult.illustration.message }}</span></div>
+            <p>Bekräfta för att lägga kortet i handen och använda en smidesladdning. Namnbyte och bekräftelse startar inga AI-anrop.</p>
             <p v-if="forgeError" class="error-message" role="alert">{{ forgeError }}</p>
           </div>
-          <div v-else class="forge-form"><p v-if="modeData?.reason" class="modal-footnote" role="status">{{ modeData.reason }}</p><p v-if="mode === 'ai' && modeData?.quota" class="modal-footnote">{{ modeData.quota.sessionRemaining }} AI-kort kvar i sessionen · {{ modeData.quota.globalRemaining }} försök kvar i POC:en.</p><ForgeChallenge v-if="mode === 'ai' && modeData?.siteKey" :key="challengeVersion" :site-key="modeData.siteKey" @token="challengeToken = $event"/><div class="mode-notice"><span class="live-dot"/><span>{{ mode === 'demo' ? 'DEMONSTRATION · FAST ÖVNINGSKORT, INGEN AI' : 'OPENAI · STRUKTURERAT OCH SERVERVALIDERAT' }}</span></div><label for="forge-prompt">Vilket kort behöver du?</label><textarea id="forge-prompt" v-model="forgePrompt" :disabled="forgeBusy || !!forgeTicket" placeholder="Beskriv din idé, vad den gör och vilka den påverkar…" maxlength="500" rows="4" @keydown.ctrl.enter.prevent="forge"/><div class="prompt-meta"><span>En idé räcker. Balansen sköter smedjan.</span><span>{{ forgePrompt.length }} / 500</span></div><div class="suggestions"><button v-for="s in suggestions" :key="s.name" :disabled="forgeBusy || !!forgeTicket" @click="forgePrompt = s.text"><RuneIcon :name="s.icon" :size="16"/>{{ s.name }}</button></div><div class="forge-rules"><RuneIcon name="forge" :size="24"/><p><b>1 laddning. Ingen mana.</b><br>Du betalar kortets mana när du spelar det. {{ you?.charges }} laddningar kvar.</p></div><div v-if="forgeBusy" class="forging-progress" role="status"><div class="forge-vortex"><i/><i/><i/><span>ᛗ</span><b v-for="n in 12" :key="n" :style="{ '--spark': n }"/></div><strong>Din tanke får liv</strong><span>Runorna binds. Kraften balanseras.</span></div><p v-if="forgeError" class="error-message" role="alert">{{ forgeError }}</p></div>
+          <div v-else class="forge-form"><label class="forge-demo-choice"><input v-model="demoRequested" type="checkbox" :disabled="forgeBusy"/> Välj övningsläge utan AI (fast övningskort)</label><p v-if="mode === 'unavailable'" class="error-message" role="alert">{{ modeReason }}</p><p v-if="mode === 'ai' && modeData?.quota" class="modal-footnote">{{ modeData.quota.sessionRemaining }} AI-kort kvar i sessionen · {{ modeData.quota.globalRemaining }} försök kvar i POC:en.</p><ForgeChallenge v-if="mode === 'ai' && modeData?.siteKey" :key="challengeVersion" :site-key="modeData.siteKey" @token="challengeToken = $event"/><div class="mode-notice"><span class="live-dot"/><span>{{ mode === 'demo' ? 'DEMONSTRATION · FAST ÖVNINGSKORT, INGEN AI' : modeData?.images ? 'OPENAI · KORT OCH ILLUSTRATION' : 'OPENAI · STRUKTURERAT OCH SERVERVALIDERAT' }}</span></div><label for="forge-prompt">Vilket kort behöver du?</label><textarea id="forge-prompt" v-model="forgePrompt" :disabled="forgeBusy || !!forgeTicket" placeholder="Beskriv din idé, vad den gör och vilka den påverkar…" maxlength="500" rows="4" @keydown.ctrl.enter.prevent="forge"/><div class="prompt-meta"><span>En idé räcker. Balansen sköter smedjan.</span><span>{{ forgePrompt.length }} / 500</span></div><div class="suggestions"><button v-for="s in suggestions" :key="s.name" :disabled="forgeBusy || !!forgeTicket" @click="forgePrompt = s.text"><RuneIcon :name="s.icon" :size="16"/>{{ s.name }}</button></div><div class="forge-rules"><RuneIcon name="forge" :size="24"/><p><b>1 laddning. Ingen mana.</b><br>Du betalar kortets mana när du spelar det. {{ you?.charges }} laddningar kvar.</p></div><div v-if="forgeBusy" class="forging-progress" role="status"><div class="forge-vortex"><i/><i/><i/><span>ᛗ</span><b v-for="n in 12" :key="n" :style="{ '--spark': n }"/></div><strong>Din tanke får liv</strong><span>{{ mode === 'ai' && modeData?.images ? 'Kortet balanseras och illustrationen skapas. Det kan ta några minuter.' : 'Runorna binds. Kraften balanseras.' }}</span></div><p v-if="forgeError" class="error-message" role="alert">{{ forgeError }}</p></div>
         </template>
-        <template #footer><template v-if="forgeResult"><button class="text-button" :disabled="forgeBusy" @click="forgePrompt = forgeDescription; forgeResult = null; forgeName = ''; forgeError = ''">Ändra idén</button><button class="gold-button modal-primary" :disabled="forgeBusy || !forgeNameValid || !forgeAvailable" @click="confirmForge">{{ forgeBusy ? 'Bekräftar…' : 'Till min hand' }} <RuneIcon name="arrow" :size="18"/></button></template><template v-else><span class="modal-footnote">{{ mode === 'demo' ? 'Ingen API-nyckel används.' : 'Ett AI-anrop görs först när du smider.' }}</span><button class="gold-button" :disabled="forgeBusy || forgePrompt.trim().length < 3 || !forgeAvailable || (mode === 'ai' && !modeData?.privateForge && !challengeToken)" @click="forge"><RuneIcon name="forge" :size="18"/>{{ forgeBusy ? 'Smider…' : forgeTicket ? 'Försök igen' : 'Smid kortet' }}</button></template></template>
+        <template #footer><template v-if="forgeResult"><button class="text-button" :disabled="forgeBusy" @click="forgePrompt = forgeDescription; forgeResult = null; forgeName = ''; forgeError = ''">Ändra idén</button><button class="gold-button modal-primary" :disabled="forgeBusy || !forgeNameValid || !forgeAvailable" @click="confirmForge">{{ forgeBusy ? 'Bekräftar…' : 'Till min hand' }} <RuneIcon name="arrow" :size="18"/></button></template><template v-else><span class="modal-footnote">{{ mode === 'demo' ? 'Inga AI-anrop görs.' : modeData?.images ? 'Högst ett text- och ett bildförsök per klick. Inga automatiska återförsök.' : 'Högst ett textförsök per klick. Inga automatiska återförsök.' }}</span><button class="gold-button" :disabled="forgeBusy || mode === 'unavailable' || forgePrompt.trim().length < 3 || !forgeAvailable || (mode === 'ai' && !modeData?.privateForge && !challengeToken)" @click="forge"><RuneIcon name="forge" :size="18"/>{{ forgeBusy ? 'Smider…' : forgeTicket ? 'Försök igen' : 'Smid kortet' }}</button></template></template>
       </UModal>
       <RulesGuide v-model:open="tutorial" :in-match="!!game"/>
       <CardLibrary v-model:open="libraryOpen"/>

@@ -1,12 +1,11 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { ForgeError } from './forge-service'
 export function aiConfiguration(env = process.env) {
-  if (env.MURGIK_DEMO === 'true') return { reason: 'Demoläge är valt.' }
-  if (!env.OPENAI_API_KEY) return { reason: 'AI är inte konfigurerad. Lokalt demoläge används.' }
+  if (!env.OPENAI_API_KEY?.trim()) return { reason: 'OPENAI_API_KEY saknas på servern. AI kan inte användas.' }
   const upstash = !!(env.UPSTASH_REDIS_REST_URL || env.UPSTASH_REDIS_REST_TOKEN)
   const url = upstash ? env.UPSTASH_REDIS_REST_URL : env.KV_REST_API_URL, token = upstash ? env.UPSTASH_REDIS_REST_TOKEN : env.KV_REST_API_TOKEN
-  if (!url || !token || !env.MURGIK_SESSION_SECRET || env.MURGIK_SESSION_SECRET.length < 32) return { reason: 'AI:s kostnadsskydd är inte konfigurerat. Lokalt demoläge används.' }
-  if (!env.TURNSTILE_SECRET_KEY || !env.TURNSTILE_SITE_KEY || !env.MURGIK_PUBLIC_ORIGIN) return { reason: 'AI:s åtkomstskydd är inte konfigurerat. Lokalt demoläge används.' }
+  if (!url || !token || !env.MURGIK_SESSION_SECRET || env.MURGIK_SESSION_SECRET.length < 32) return { reason: 'Publik AI:s kostnadsskydd är inte konfigurerat. Välj övningsläge eller konfigurera skyddet.' }
+  if (!env.TURNSTILE_SECRET_KEY || !env.TURNSTILE_SITE_KEY || !env.MURGIK_PUBLIC_ORIGIN) return { reason: 'Publik AI:s åtkomstskydd är inte konfigurerat. Välj övningsläge eller konfigurera skyddet.' }
   try { const origin = new URL(env.MURGIK_PUBLIC_ORIGIN); if (origin.protocol !== 'https:' || origin.origin !== env.MURGIK_PUBLIC_ORIGIN) throw new Error() } catch { return { reason: 'AI:s publika adress är inte konfigurerad. Lokalt demoläge används.' } }
   return { url, token, secret: env.MURGIK_SESSION_SECRET, siteKey: env.TURNSTILE_SITE_KEY, origin: env.MURGIK_PUBLIC_ORIGIN }
 }

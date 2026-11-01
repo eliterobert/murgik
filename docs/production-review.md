@@ -1,5 +1,7 @@
 # Murgik: publik POC på Vercel
 
+> Historisk granskning av den begränsade publika grenen. Aktuell privat AI Forge, explicit övningsläge, modellval och illustrationer beskrivs i [DEPLOY.md](../DEPLOY.md). Uppgifterna nedan om automatiskt demoläge, avstängda bilder, modell och tokenbudget gäller inte längre som generell driftinstruktion.
+
 **Status: BLOCKED tills riktiga OpenAI-, Upstash- och Turnstile-credentials har konfigurerats och verifierats.** Ingen deploy har gjorts. Spelet fungerar i tydligt märkt demoläge utan dessa tjänster. Design, spelregler, illustrationer, ljud och animationer är bevarade. AI-bildgenerering är avstängd och bild-endpoints kan inte starta betalda anrop.
 
 ## Externa tjänster och miljövariabler

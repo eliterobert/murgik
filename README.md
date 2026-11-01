@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-`dev` läser `.env` och därefter `.env.demo`, som tvingar kostnadsfritt demoläge. Privat inloggning kräver servervariablerna `MURGIK_ACCESS_PASSWORD` och `MURGIK_SESSION_SECRET` (minst 32 tecken). `npm run dev:ai` använder `.env` utan demoöverstyrning. Inga hemligheter ska läggas i klientkod eller Git.
+`dev` läser `.env`. Privat inloggning kräver servervariablerna `MURGIK_ACCESS_PASSWORD` och `MURGIK_SESSION_SECRET` (minst 32 tecken). Med `OPENAI_API_KEY` används riktig AI Forge inklusive en kortillustration per uttryckligt Skapa-klick. `dev:ai` är ett likvärdigt alias. Saknad nyckel eller API-fel visas som fel; övningskort kräver spelarens uttryckliga val. Den äldre variabeln `MURGIK_DEMO` ignoreras. Inga hemligheter ska läggas i klientkod eller Git. Se [DEPLOY.md](DEPLOY.md) för modellval och Vercel.
 
 ## Kontrollera
 

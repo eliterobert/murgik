@@ -28,7 +28,7 @@ Två avgränsade stöd har lagts till i den befintliga motorn: **Raseri** (`enra
 
 Demoläget visar ett fast, neutralt övningskort och säger uttryckligen att beskrivningen inte tolkas. Det kräver varken AI-nyckel eller nätverksanrop. Det fungerar som övning för förhandsvisning, namnbyte, bekräftelse och spelbarhet; det låtsas inte ersätta semantisk AI-tolkning.
 
-Baskortens tidigare illustrationer är explicit kopplade till stabila samlings-ID:n i `shared/game/base-art.ts`. Smidda kort använder endast en generell bild för sin visuella palett. Namn, artPrompt och ämnesord väljer aldrig motiv. Den tidigare motivspecifika bilden och dess CSS-effekt är borttagna. Ingen ny bildgenerering eller extern bildhämtning görs.
+Baskortens tidigare illustrationer är explicit kopplade till stabila samlings-ID:n i `shared/game/base-art.ts`. Riktig privat Forge skapar nu en originalillustration från hela spelarbeskrivningen och det balanserade kortets identitet, med högst ett bildförsök i samma Skapa-anrop. Bilden följer namnändring och bekräftelse utan nya API-anrop och cachas under matchen. Övningskort och bildfel använder en generell bild för sin visuella palett. Namn och ämnesord väljer aldrig fördefinierade motiv. Den tidigare motivspecifika bilden och dess CSS-effekt förblir borttagna. Se [DEPLOY.md](../DEPLOY.md).
 
 Autentisering, Forge Charges, nyckelhantering, Redis, Turnstile och serverstyrda kvoter är bevarade, liksom samtliga 80 baskort, lekar, förberedelserunda, ljud och animationer.
 

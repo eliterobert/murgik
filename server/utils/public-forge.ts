@@ -2,16 +2,16 @@ import { generateCard, ForgeError } from './forge-service'
 import type { ForgeRequest, ForgeResponse } from './forge-service'
 import { QuotaStore, StorageUnavailable } from './quota-store'
 // Called only after cookie/CSRF/origin checks. Dependencies are injectable for integration tests.
-export async function publicForge(request: ForgeRequest, sid: string, ipHash: string, store: QuotaStore, challenge: () => Promise<void>, generate = generateCard): Promise<ForgeResponse> {
+export async function publicForge(request: ForgeRequest, sid: string, ipHash: string, store: QuotaStore, challenge: () => Promise<void>, generate = (input: ForgeRequest, mode: 'demo' | 'ai') => generateCard(input, mode, 25_000)): Promise<ForgeResponse> {
   try {
     await store.rate(sid, ipHash)
     const cached = await store.lookup(sid, request)
     if (cached) return cached
     const quota = await store.status(sid)
-    if (!quota.globalRemaining || !quota.sessionRemaining) return { ...await generate(request, 'demo'), quota, reason: 'AI-kvoten är slut. Kortet skapas i lokalt demoläge.' }
+    if (!quota.globalRemaining || !quota.sessionRemaining) throw new ForgeError(429, 'Den publika AI-kvoten är slut. Välj övningsläge uttryckligen om du vill fortsätta utan AI.')
   } catch (error) {
     if (!(error instanceof StorageUnavailable)) throw error
-    return { ...await generate(request, 'demo'), reason: 'AI:s kostnadsskydd är otillgängligt. Kortet skapas i lokalt demoläge.' }
+    throw new ForgeError(503, 'AI:s kostnadsskydd är otillgängligt. Inget AI-anrop görs. Välj övningsläge uttryckligen om du vill fortsätta utan AI.')
   }
   await challenge()
   try {

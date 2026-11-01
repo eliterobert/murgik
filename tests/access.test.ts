@@ -4,6 +4,7 @@ import * as h3 from 'h3'
 import { ACCESS_COOKIE, ACCESS_LIFETIME, accessConfiguration, accessCsrf, issueAccess, passwordMatches, verifyAccess, privateForgeEnabled } from '../server/utils/access'
 import { demoForge } from '../shared/game/forge'
 import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { basename, dirname, resolve, join } from 'node:path'
 import { loadDotenv } from 'c12'
 const password = 'TEST_ONLY_access_password', secret = 'TEST_ONLY_session_secret_longer_than_32_characters'
@@ -49,7 +50,8 @@ describe('signed private access',()=>{
       // c12 is the actual dotenv loader used by the installed Nuxt CLI.
       const loaded=await loadDotenv({cwd:directory,fileName:files,env:{},interpolate:true})
       expect(accessConfiguration(loaded)).not.toBeNull()
-      expect(loaded.MURGIK_DEMO).toBe('true')
+      expect(files).toEqual(['.env'])
+      expect(loaded.MURGIK_DEMO).toBe('false')
       for(const name of ['MURGIK_ACCESS_PASSWORD','MURGIK_SESSION_SECRET']) vi.stubEnv(name,loaded[name])
       const result=await(await nativeFetch(base+'/api/auth/session')).json()
       expect(result).toEqual({configured:true,authenticated:false,privateForge:true})
@@ -122,17 +124,24 @@ describe('signed private access',()=>{
     expect((await nativeFetch(base+'/api/mode',{headers:{Cookie:`${ACCESS_COOKIE}=${expired.cookie}`}})).status).toBe(401)
   })
   it('runs validated AI Forge after login without Redis or Turnstile calls',async()=>{
+    vi.stubEnv('MURGIK_DEMO','true') // A stale deployment flag must not replace AI with an exercise.
     const {cookie,csrf}=await authenticated(), card=demoForge().card
     const calls:string[]=[]
     vi.stubGlobal('fetch',async(input: RequestInfo|URL,init?: RequestInit)=>{
       const url=String(input);calls.push(url)
       if(url==='https://api.openai.com/v1/responses') return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({card,adaptations:[]})}]}]})
+      if(url==='https://api.openai.com/v1/images/generations') return Response.json({data:[{b64_json:readFileSync('public/art/dawn-knight.jpg').toString('base64')}]})
       throw new Error('Unexpected external call')
     })
     const mode=await(await nativeFetch(base+'/api/mode',{headers:{Cookie:cookie}})).json();expect(mode.mode).toBe('ai');expect(mode.privateForge).toBe(true);expect(mode.siteKey).toBeUndefined()
     const response=await post('/api/forge',request(),{Cookie:cookie,'X-Murgik-Access-CSRF':csrf})
-    expect(response.status).toBe(200);const result=await response.json();expect(result.mode).toBe('ai');expect(result.card).toEqual(card);expect(result.illustration.status).toBe('disabled')
-    expect(calls).toEqual(['https://api.openai.com/v1/responses'])
+    expect(response.status).toBe(200);const result=await response.json();expect(result.mode).toBe('ai');expect(result.card).toEqual(card);expect(result.illustration.status).toBe('ready');expect(result.illustration.url).toMatch(/^data:image\/jpeg;base64,/)
+    expect(calls).toEqual(['https://api.openai.com/v1/responses','https://api.openai.com/v1/images/generations'])
+  })
+  it('returns a safe HTTP error after one failed AI attempt without silently creating a demo card or image',async()=>{
+    const {cookie,csrf}=await authenticated(),network=vi.fn(async()=>new Response('TEST_ONLY_private_upstream_error',{status:401}));vi.stubGlobal('fetch',network)
+    const response=await post('/api/forge',request(),{Cookie:cookie,'X-Murgik-Access-CSRF':csrf}),body=await response.json()
+    expect(response.status).toBe(502);expect(body.card).toBeUndefined();expect(JSON.stringify(body)).not.toContain('TEST_ONLY_private_upstream_error');expect(network).toHaveBeenCalledTimes(1)
   })
   it('preserves CSRF, origin and prompt validation for private Forge',async()=>{
     const {cookie,csrf}=await authenticated(), calls=vi.fn();vi.stubGlobal('fetch',calls)
@@ -159,20 +168,22 @@ describe('signed private access',()=>{
     expect((await post('/api/forge/confirm',{...confirmation,token:generated.draftToken+'x'},headers)).status).toBe(400)
     expect((await post('/api/forge/confirm',{...confirmation,token:'x'.repeat(9000)},headers)).status).toBe(413)
     const replays=await Promise.all([post('/api/forge/confirm',confirmation,headers),post('/api/forge/confirm',confirmation,headers)])
-    expect(replays.every(r=>r.status===200)).toBe(true);expect(network).toHaveBeenCalledTimes(1)
+    expect(replays.every(r=>r.status===200)).toBe(true);expect(network).toHaveBeenCalledTimes(2)
     expect(JSON.stringify(await replays[0]!.json())).not.toContain(secret)
   })
-  it('uses demo without an API key even for authenticated users',async()=>{
+  it('errors without an API key and creates an exercise card only when explicitly requested',async()=>{
     vi.stubEnv('OPENAI_API_KEY','');const {cookie,csrf}=await authenticated();const calls=vi.fn();vi.stubGlobal('fetch',calls)
-    const result=await(await post('/api/forge',request(),{Cookie:cookie,'X-Murgik-Access-CSRF':csrf})).json()
-    expect(result.mode).toBe('demo');expect(calls).not.toHaveBeenCalled()
+    const headers={Cookie:cookie,'X-Murgik-Access-CSRF':csrf}
+    const mode=await(await nativeFetch(base+'/api/mode',{headers:{Cookie:cookie}})).json();expect(mode.mode).toBe('unavailable')
+    const failed=await post('/api/forge',request(),headers);expect(failed.status).toBe(503);expect((await failed.json()).card).toBeUndefined()
+    const demo=await post('/api/forge',{...request(),demo:true},headers);expect(demo.status).toBe(200);expect((await demo.json()).mode).toBe('demo');expect(calls).not.toHaveBeenCalled()
   })
   it('preserves fail-closed public mode when explicitly selected without Redis',async()=>{
     vi.stubEnv('MURGIK_PRIVATE_FORGE','false');const {cookie,csrf}=await authenticated();const calls=vi.fn();vi.stubGlobal('fetch',calls)
     const mode=await(await nativeFetch(base+'/api/mode',{headers:{Cookie:cookie}})).json()
-    expect(mode.mode).toBe('demo');expect(mode.privateForge).toBeUndefined()
-    const result=await(await post('/api/forge',request(),{Cookie:cookie,'X-Murgik-Access-CSRF':csrf})).json()
-    expect(result.mode).toBe('demo');expect(calls).not.toHaveBeenCalled()
+    expect(mode.mode).toBe('unavailable');expect(mode.privateForge).toBeUndefined()
+    const result=await post('/api/forge',request(),{Cookie:cookie,'X-Murgik-Access-CSRF':csrf})
+    expect(result.status).toBe(503);expect((await result.json()).card).toBeUndefined();expect(calls).not.toHaveBeenCalled()
   })
   it('clears the cookie on logout, requires CSRF and refuses further anonymous API calls',async()=>{
     const {cookie,csrf}=await authenticated()

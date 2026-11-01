@@ -1,6 +1,4 @@
-// Production preview defaults to a credential-free demo, just like npm run dev.
-// Only preview:ai explicitly loads .env, via Node's --env-file flag.
-process.env.MURGIK_DEMO = process.argv.includes('--ai') ? 'false' : 'true'
+// Use local/injected server variables without overriding the player's Forge mode.
 process.env.NITRO_HOST = '127.0.0.1'
 const portIndex = process.argv.indexOf('--port')
 if (portIndex >= 0) {
