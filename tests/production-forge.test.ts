@@ -7,8 +7,8 @@ import { forgeRequestSchema } from '../shared/game/schema'
 import { demoForge } from '../shared/game/forge'
 import { act, createGame, validTargets, canPlay } from '../shared/game/engine'
 import { LuaRedis } from './redis-lua'
-const request = () => forgeRequestSchema.parse({ matchId: crypto.randomUUID(), requestId: crypto.randomUUID(), prompt: 'En riddare som kallar en följeslagare och skänker sköld', context: { turn: 1, life: 20, opponentLife: 20, maxMana: 1, allies: 0, enemies: 0 } })
-const response = () => ({ ...demoForge('haste wolf'), mode: 'ai' as const })
+const request = () => forgeRequestSchema.parse({ matchId: crypto.randomUUID(), requestId: crypto.randomUUID(), prompt: 'Ett kort som kombinerar åkallan med beskydd', context: { turn: 1, life: 20, opponentLife: 20, maxMana: 1, allies: 0, enemies: 0 } })
+const response = () => ({ ...demoForge(), mode: 'ai' as const })
 const setup = () => { const redis = new LuaRedis(); return { redis, store: new QuotaStore(redis.command) } }
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 describe('persistent public Forge, production Lua scripts', () => {

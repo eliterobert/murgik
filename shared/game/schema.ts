@@ -14,7 +14,7 @@ export const cardSchema = z.object({
   cost: z.number().int().min(0).max(100),
   attack: z.number().int().min(0).max(100),
   health: z.number().int().min(0).max(100),
-  keywords: z.array(z.enum(['flying', 'guard', 'haste', 'lifesteal'])).max(4),
+  keywords: z.array(z.enum(['flying', 'guard', 'haste', 'lifesteal', 'enrage'])).max(4),
   effects: z.array(effectSchema).max(3),
   artPrompt: z.string().max(240),
   theme: z.enum(['ember', 'forest', 'void', 'storm', 'frost', 'gold'])

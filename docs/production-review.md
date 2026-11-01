@@ -43,7 +43,7 @@ Det sista kommandot ska returnera `-1`. Kontrollera också att detta är den avs
 - Verifierad Turnstile krävs före en ny AI-reservation, med rätt hostname och action. Ett sparat resultat kräver inte en ny engångstoken. JSON, origin, cookie, CSRF-header och Zod-schema kontrolleras server-side. Prompt högst 500 tecken och request högst 8192 bytes, även vid chunked överföring.
 - Inget verktyg eller kod från modellen körs. Endast fasta effekter/keywords i strikt JSON accepteras, Zod validerar och den befintliga deterministiska balansen beräknar faktisk styrka och pris. Modelltext renderas som text av Vue.
 - Nycklar, råa prompts, IP-adresser och upstream-felsvar loggas inte av applikationen. Redis lagrar genererade kort och hashat requestinnehåll, inte råa prompts. Ratelimitnycklar har kort TTL; ledgern är permanent och begränsas av 50 reservationer per manuell budgetperiod.
-- Vid uppnådd kvot eller otillgänglig lagring används lokala demorecept med tydlig märkning. Vid osäker reservation/slutkvittens görs inget nytt AI-anrop. Matchens laddningar räknas av först när ett kort faktiskt förs in av spelmotorn.
+- Vid uppnådd kvot eller otillgänglig lagring visas ett fast lokalt övningskort med tydlig märkning att beskrivningen inte tolkas. Vid osäker reservation/slutkvittens görs inget nytt AI-anrop. Matchens laddningar räknas av först när ett kort faktiskt förs in av spelmotorn.
 
 ## Vercel-inställningar och steg före deploy
 

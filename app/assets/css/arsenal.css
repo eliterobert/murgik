@@ -1,0 +1,60 @@
+.deck-selection { max-width: 390px; margin: 22px 0 0; }
+.deck-selection label { display: flex; gap: 9px; align-items: center; color: #e7d09a; font-size: 9px; letter-spacing: 1.7px; margin-bottom: 9px; }
+.deck-selection select, .library-filters select, .library-filters input { width: 100%; border: 1px solid #c7b77a60; border-radius: 4px; background: #162e38e8; color: #f0e7cf; padding: 11px 12px; font: inherit; outline: none; }
+.deck-selection select:focus-visible, .library-filters input:focus-visible, .library-filters select:focus-visible { border-color: var(--gold-light); box-shadow: 0 0 0 2px #ddc18b29; }
+.deck-selection p { font-size: 11px; line-height: 1.65; color: #c0cfc4; margin: 9px 0 5px; min-height: 18px; }
+.deck-selection small { font-size: 9px; color: #a6b9b1; }
+.landing-cta { flex-wrap: wrap; row-gap: 6px; }
+.library-arena-button { width: 100%; justify-content: flex-start; padding: 10px 0 0; color: #e8ce96; }
+@media (max-width:760px) { .left-rail .arena-title { display: block; order: 1; flex: 0 0 100%; padding: 0 8px 4px; border: 0; }.arena-title > :not(.library-arena-button) { display: none; }.library-arena-button { width: auto; padding: 4px 0; font-size: 11px; } }
+.deck-style-note { font-size: 10px; line-height: 1.5; color: #c5d7c5; margin-top: 8px; }
+.preparation-note { display: block; margin: 6px 0; color: #b8cbb8; font-size: 10px; letter-spacing: .3px; }
+.forge-success .forge-original-idea { margin: 14px auto 20px; font: italic 15px/1.6 Georgia,serif; color: #e8d5ac; }
+.forge-success .forge-art-notice { margin-bottom: 14px; font-size: 10px; color: #c6ceb8; }.forge-modal .modal-primary { width: auto; min-width: 0; flex: 1; }.forge-modal > div:last-child > .text-button { white-space: nowrap; flex-shrink: 0; }
+.forge-name-editor { text-align: left; margin: 18px 0; }.forge-name-editor label { display: flex; justify-content: space-between; font-size: 12px; color: #e8d5ac; }.forge-name-editor label span { color: #b9cbb7; font-size: 10px; }.forge-name-editor input { width: 100%; padding: 11px 12px; margin: 8px 0; border: 1px solid #c7b77a60; border-radius: 4px; background: #162e38e8; color: #f0e7cf; font-size: 16px; }.forge-name-editor input:focus-visible { outline: 2px solid #d8c08b; outline-offset: 2px; }.forge-name-editor p { font-size: 10px; line-height: 1.7; color: #bccdb8; }.forge-name-editor .error-message { color: #ffbda8; }.forge-name-editor .text-button { padding-left: 0; font-size: 10px; margin-top: 8px; }
+.forge-preview-facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0; }.forge-preview-facts span { border: 1px solid #c7b77a55; border-radius: 4px; color: #ead9b8; padding: 7px 10px; font-size: 11px; }.forge-success .forge-identity { color: #e0d2ae; font: 16px/1.7 Georgia,serif; }.forge-success .balance-note { text-align: left; }.forge-success .balance-note b { display: block; margin-bottom: 8px; color: #e5d6b2; }.forge-success .balance-note ul { list-style: disc; padding-left: 16px; }.forge-success .balance-note li + li { margin-top: 8px; }.forge-interpretation p + p { margin-top: 10px; }
+.inspector-ruletext { font-size: 11px; line-height: 1.6; color: #dce5d1; max-height: 76px; overflow-y: auto; margin-top: 10px; }
+.effect-buff .floating-number { color: #c9eea7; font-size: 27px; text-shadow: 0 2px 9px #07192b; }
+.library-modal { width: min(1480px, calc(100vw - 40px)) !important; max-width: 1480px !important; height: min(980px, 93svh); max-height: 96svh !important; background: linear-gradient(135deg, #263e46, #142a37) !important; border: 1px solid #cfba8199; --ui-text-highlighted: #f1e6cd; --ui-text-muted: #bfd0bd; }
+.library-modal > div:first-child h2 { font: 24px Georgia, serif; color: #f1dfb6; }
+.library-modal > div:last-child { justify-content: space-between; align-items: center; }
+.collection-shell { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.collection-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding-bottom: 17px; }
+.collection-heading h2 { font: 32px Georgia, serif; color: #efdeb3; margin-top: 8px; }
+.collection-heading > span { font-size: 11px; color: #c7d8c5; }
+.library-filters { display: grid; grid-template-columns: minmax(180px,2fr) repeat(3,minmax(115px,1fr)); gap: 12px; margin-bottom: 21px; }
+.library-filters label { font-size: 10px; color: #d8cbac; }
+.library-filters input,.library-filters select { display: block; margin-top: 7px; font-size: 12px; }
+.library-layout { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 25px; min-height: 0; flex: 1; position: relative; }
+.library-gallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(155px,1fr)); align-content: start; gap: 20px 15px; overflow: auto; min-height: 200px; padding: 10px 12px 20px 6px; scrollbar-color: #bfa36a #132831; position: relative; z-index: 0; isolation: isolate; }
+.library-card { background: transparent; border: 0; padding: 0; min-width: 0; text-align: left; color: inherit; }
+.library-card .game-card { width: 100%; height: 264px; max-width: 220px; margin: 0 auto; cursor: pointer; transition: transform .18s,box-shadow .18s; }
+.library-card .art-window { height: 120px; }
+.library-card .card-heading { font-size: 13px; }
+.library-card .card-type { font-size: 8px; }
+.library-card .card-rules { font-size: 10px; }
+.library-card .card-flavor { display: none; }
+.library-card-role { display: block; margin: 8px 2px 0; font-size: 10px; color: #baccbb; }
+.library-card:hover .game-card,.library-card.chosen .game-card { transform: translateY(-4px); box-shadow: 0 0 22px #d8b66e4a; }
+.library-detail { overflow: auto; min-height: 0; padding: 8px 10px 18px 0; outline: none; scrollbar-color: #bfa36a #132831; }
+.library-detail > .game-card { width: 250px; height: 350px; margin: 0 auto 17px; }
+.library-detail .art-window { height: 169px; }
+.library-detail h3 { font: 22px Georgia,serif; color: #eed6a0; margin: 16px 0 10px; }
+.collection-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.collection-tags span { border: 1px solid #cfbd7c4d; padding: 4px 8px; color: #e5d8b4; font-size: 10px; border-radius: 3px; }
+.detail-summary,.detail-effects,.detail-keyword { font-size: 12px; line-height: 1.8; color: #d6e0cd; }
+.detail-effects { list-style: decimal; margin: 12px 0; padding-left: 20px; }
+.detail-keyword { margin-top: 10px; }.detail-keyword b { color: #ebd2a0; }
+.collection-synergy { display: flex; gap: 10px; padding: 14px; margin: 17px 0; background: #b4a76b0c; border: 1px solid #baa5703d; border-radius: 5px; }
+.collection-synergy svg { flex-shrink: 0; color: #e8cd93; margin-top: 3px; }
+.collection-synergy h4 { font: 17px Georgia,serif; color: #e8d6aa; margin-bottom: 8px; }
+.collection-synergy p { font-size: 12px; line-height: 1.7; color: #c6d9c5; }
+.library-detail > small,.library-footnote { font-size: 10px; line-height: 1.6; color: #adbfaf; }
+.library-invitation { text-align: center; align-self: center; padding: 25px; color: #bfcdbb; }.library-invitation svg { margin: 0 auto 20px; color: #d9bd80; }.library-invitation h3 { font: 25px Georgia,serif; color: #ead7ac; margin-bottom: 14px; }.library-invitation p { line-height: 1.8; }.library-invitation span { display: block; font-size: 10px; line-height: 1.8; margin-top: 22px; }
+.library-back { display: none; }.library-empty { grid-column: 1/-1; text-align: center; padding: 55px 10px; }.library-empty svg { margin: 0 auto 20px; color: #d5bd87; }.library-empty h3 { font: 23px Georgia,serif; }
+@media (max-width:900px) { .library-detail .library-back { position: sticky; top: 0; z-index: 30; background: #1a303b; } }
+.forge-interpretation { text-align: left; margin: 18px 0; padding: 15px; border: 1px solid #c8b17d42; border-radius: 5px; background: #b6c89c09; }.forge-interpretation h4 { color: #ebd4a2; font-size: 12px; margin-bottom: 9px; }.forge-interpretation p { color: #d2e2cd; font-size: 12px; line-height: 1.8; }
+.guide-deck-facts { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; padding: 15px 0; }.guide-deck-facts span { border: 1px solid #d2bc783d; border-radius: 5px; text-align: center; font-size: 11px; padding: 12px 8px; color: #d1ddc7; }.guide-deck-facts b { display: block; color: #e8cc93; font: 28px Georgia,serif; margin-bottom: 6px; }
+@media (max-height:800px) and (min-width:1101px) { .landing:has(.deck-selection) { padding-bottom: 80px; }.landing:has(.deck-selection) .landing-cta { margin-top: 19px; }.landing:has(.deck-selection) .landing-facts { margin-top: 22px; }.deck-selection { margin-top: 16px; } }
+@media (max-width:900px) { .library-modal { width: calc(100vw - 16px) !important; height: 96svh; }.library-layout { display: block; }.library-gallery { height: 100%; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 18px 12px; }.library-invitation { display: none; }.library-filters { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }.library-detail { position: absolute; inset: 0; background: #1a303b; z-index: 2; padding: 10px 14px 25px; }.library-back { display: flex; margin-bottom: 12px; }.library-card .game-card { height: 248px; }.library-card .art-window { height: 103px; }.library-footnote { max-width: 55%; }.collection-heading h2 { font-size: 28px; }.collection-heading > span { font-size: 10px; } }
+@media (max-width:420px) { .library-gallery { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px 10px; padding: 10px 3px 16px; }.library-card .game-card { height: 230px; }.library-card .art-window { height: 91px; }.library-card .card-heading { font-size: 11px; }.library-card .card-rules { font-size: 9px; }.library-filters input,.library-filters select { font-size: 16px; }.deck-selection select { font-size: 16px; } }

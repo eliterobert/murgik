@@ -1,14 +1,16 @@
 ﻿<script setup lang="ts">
 import { sv } from '@nuxt/ui/locale'
-import { act, canAttack, canBlock, canPlay, createGame, needsTarget, validTargets } from '#shared/game/engine'
+import { act, availableAttackers, canBlock, canPlay, createGame, isPreparationTurn, needsTarget, validTargets } from '#shared/game/engine'
 import { botAction } from '#shared/game/bot'
 import { catalog } from '#shared/game/catalog'
 import { cardText, keywordHelp, keywordNames } from '#shared/game/text'
 import type { Action, Card, CardDraft, Creature, GameState } from '#shared/game/types'
 import type { Illustration } from '#shared/game/art'
-import { artIdentity } from '#shared/game/art'
 import { phaseLabels } from '#shared/game/rules'
 import { actionSounds } from '#shared/audio/cues'
+import { deckStyles } from '#shared/game/decks'
+import type { DeckChoice } from '#shared/game/decks'
+import { CARD_NAME_HELP, CARD_NAME_MAX, cardNameSchema } from '#shared/game/card-name'
 const props = defineProps<{ accessCsrf: string }>()
 
 // Engine snapshots are immutable. Keep them plain so structuredClone never receives a Vue proxy.
@@ -20,6 +22,10 @@ interface ForgeMode { mode: 'demo' | 'ai'; privateForge?: boolean; reason?: stri
 const { data: modeData } = await useFetch<ForgeMode>('/api/mode', { server: false })
 const mode = computed(() => modeData.value?.mode ?? 'demo')
 const tutorial = ref(false)
+const libraryOpen = ref(false)
+const deckChoice = ref<DeckChoice>('random')
+const yourDeck = computed(() => you.value?.deckStyle ? deckStyles[you.value.deckStyle] : null)
+const enemyDeck = computed(() => enemy.value?.deckStyle ? deckStyles[enemy.value.deckStyle] : null)
 const clientReady = ref(false)
 const forgeOpen = ref(false)
 const forgeBusy = ref(false)
@@ -27,7 +33,11 @@ const forgePrompt = ref('')
 const forgeError = ref('')
 const challengeToken = ref('')
 const challengeVersion = ref(0)
-const forgeResult = ref<{ card: CardDraft; adjustments: string[]; mode: string } | null>(null)
+const forgeResult = ref<{ card: CardDraft; adjustments: string[]; mode: string; draftToken: string; illustration: Illustration } | null>(null)
+const forgeName = ref('')
+const forgeDescription = ref('')
+const forgeNameValid = computed(() => cardNameSchema.safeParse(forgeName.value).success)
+const previewCard = computed(() => forgeResult.value ? { ...forgeResult.value.card, name: forgeName.value.trim() || forgeResult.value.card.name } : null)
 const forgeTicket = ref<{ id: string; prompt: string; context: { turn: number; life: number; opponentLife: number; maxMana: number; allies: number; enemies: number } } | null>(null)
 const selectedCard = ref<string | null>(null)
 const attackers = ref<string[]>([])
@@ -54,21 +64,23 @@ function hoverSound(event: PointerEvent | FocusEvent) {
   playSound('hover')
 }
 const { effects, turnBanner, botCard, botMessage, capture, clear: clearEffects } = useBattleEffects()
-const { remember: rememberArt, library: artLibrary } = useIllustrations()
+const { remember: rememberArt } = useIllustrations()
 const introVisible = ref(false)
 const introSeen = ref(true)
-const resultArt = computed(() => forgeResult.value ? artLibrary.value[artIdentity(forgeResult.value.card)] : undefined)
 function dismissIntro() {
   introVisible.value = false; introSeen.value = true
   try { localStorage.setItem('murgik-intro-seen', 'true') } catch { /* Storage is optional. */ }
 }
 const suggestions = [
-  { name: 'Unik elddrake', text: 'En elddrake som skadar alla fiender när den landar.', icon: 'sword' },
-  { name: 'Skydda mina varelser', text: 'Skydda mina varelser från nästa attack.', icon: 'shield' },
-  { name: 'En riskabel blodspakt', text: 'En riskabel besvärjelse som kostar mig liv men skadar motståndaren.', icon: 'heart' },
-  { name: 'En snabb följeslagare', text: 'En snabb liten glödvarg med hast.', icon: 'spark' }
+  { name: 'Tryck och kontroll', text: 'Ett kort som skadar fiendevarelser och hindrar ett valt hot från att anfalla.', icon: 'sword' },
+  { name: 'Skydd och styrka', text: 'Ett kort som förstärker en egen varelse och skyddar den mot en träff.', icon: 'shield' },
+  { name: 'Resurser med risk', text: 'Ett kort som betalar eget liv för kortdragning och tillfällig mana.', icon: 'heart' },
+  { name: 'Återhämtning', text: 'Ett kort som återställer hälsa till mina skadade varelser.', icon: 'spark' }
 ]
 const phaseNames = phaseLabels
+const preparation = computed(() => !!game.value && isPreparationTurn(game.value))
+const visiblePhases = computed(() => Object.entries(phaseNames).filter(([key]) => !preparation.value || key !== 'combat'))
+const yourAttackers = computed(() => game.value ? availableAttackers(game.value, 'you') : [])
 const selected = computed(() => you.value?.hand.find(c => c.id === selectedCard.value))
 const targets = computed(() => game.value && selected.value ? validTargets(game.value, 'you', selected.value) : [])
 const humanMain = computed(() => game.value?.active === 'you' && game.value?.phase === 'main' && !game.value.combat && !game.value.winner)
@@ -78,12 +90,13 @@ const forgeAvailable = computed(() => humanMain.value && !forgeBusy.value && (yo
 const nextLabel = computed(() => {
   if (defending.value) return 'Bekräfta försvar'
   if (game.value?.active === 'bot' || game.value?.combat) return 'Veyra tänker…'
-  return ({ draw: 'Till huvudfas', main: 'Till strid', combat: attackers.value.length ? `Anfall med ${attackers.value.length}` : 'Avstå anfall', end: 'Avsluta tur' })[game.value?.phase ?? 'main']
+  return ({ draw: 'Till huvudfas', main: yourAttackers.value.length ? 'Gå till attack' : 'Avsluta tur', combat: !yourAttackers.value.length ? 'Avsluta tur' : attackers.value.length ? `Anfall med ${attackers.value.length}` : 'Avstå anfall', end: 'Avsluta tur' })[game.value?.phase ?? 'main']
 })
 const hint = computed(() => {
   if (selected.value) return `Välj ett markerat mål för ${selected.value.name}. Esc avbryter.`
   if (defending.value) return selectedBlocker.value ? 'Välj en anfallande fiende att blockera.' : 'Välj en egen varelse, sedan en anfallare. Vakter blockerar automatiskt.'
   if (game.value?.active === 'bot') return 'Veyra väver sin nästa plan.'
+  if (preparation.value) return 'Bygg ditt slagfält. Båda får en förberedelsetur innan anfall tillåts.'
   if (game.value?.phase === 'combat') return 'Markera dina redo varelser och bekräfta anfallet.'
   if (game.value?.phase === 'end') return 'Striden är över. Lämna över turen när du är redo.'
   return 'Spela ett kort ur handen eller smid något ingen sett förut.'
@@ -97,9 +110,9 @@ function toast(text: string) {
 function start() {
   clearTimeout(timer); matchVersion.value++
   clearEffects(); stopAudio(); playSound('turn'); playSound('draw', .1)
-  game.value = createGame(crypto.randomUUID(), Math.floor(Math.random() * 0xFFFFFFFF))
+  game.value = createGame(crypto.randomUUID(), Math.floor(Math.random() * 0xFFFFFFFF), { deck: deckChoice.value })
   selectedCard.value = null; selectedBlocker.value = null; attackers.value = []
-  forgeResult.value = null; forgeTicket.value = null; forgeError.value = ''; forgeOpen.value = false; restartOpen.value = false
+  forgeResult.value = null; forgeName.value = ''; forgeTicket.value = null; forgeError.value = ''; forgeOpen.value = false; restartOpen.value = false
   inspected.value = null
   introVisible.value = !introSeen.value
 }
@@ -141,7 +154,7 @@ function unitClick(unit: Creature, side: 'you' | 'bot') {
     return
   }
   if (side === 'you' && game.value.active === 'you' && game.value.phase === 'combat' && !game.value.combat) {
-    if (!canAttack(unit)) { toast('Varelsen kan inte attackera nu. Nya varelser måste vänta en tur, om de saknar Hast.'); return }
+    if (!yourAttackers.value.some(c => c.id === unit.id)) { toast('Varelsen kan inte attackera nu. Nya varelser måste vänta en tur, om de saknar Hast.'); return }
     attackers.value = attackers.value.includes(unit.id) ? attackers.value.filter(id => id !== unit.id) : [...attackers.value, unit.id]
     playSound('select')
   }
@@ -151,18 +164,18 @@ function next() {
   selectedCard.value = null
   if (defending.value) { dispatch({ type: 'resolve', side: 'you' }); selectedBlocker.value = null }
   else if (game.value.active === 'you' && !game.value.combat) {
-    if (game.value.phase === 'combat' && attackers.value.length) dispatch({ type: 'attack', side: 'you', attackers: attackers.value })
+    if (game.value.phase === 'combat' && yourAttackers.value.length && attackers.value.length) dispatch({ type: 'attack', side: 'you', attackers: attackers.value })
     else dispatch({ type: 'next', side: 'you' })
     attackers.value = []
   }
 }
 function openForge() {
   if (!forgeAvailable.value) return
-  if (!forgeTicket.value) { forgeResult.value = null; forgeError.value = '' }
+  if (!forgeTicket.value) forgeError.value = ''
   forgeOpen.value = true
 }
 async function forge() {
-  if (!game.value || !forgeAvailable.value || forgePrompt.value.trim().length < 3) return
+  if (!game.value || forgeResult.value || !forgeAvailable.value || forgePrompt.value.trim().length < 3) return
   if (mode.value === 'ai' && !modeData.value?.privateForge && !challengeToken.value) { forgeError.value = 'Bekräfta säkerhetskontrollen först.'; return }
   forgeBusy.value = true; forgeError.value = ''
   playSound('forge')
@@ -170,7 +183,7 @@ async function forge() {
   const p = game.value.players.you
   forgeTicket.value ??= { id: crypto.randomUUID(), prompt: forgePrompt.value.trim(), context: { turn: game.value.turn, life: p.life, opponentLife: game.value.players.bot.life, maxMana: p.maxMana, allies: p.board.length, enemies: game.value.players.bot.board.length } }
   try {
-    const result = await $fetch<{ card: CardDraft; adjustments: string[]; mode: 'demo' | 'ai'; reason?: string; quota?: { sessionRemaining: number; globalRemaining: number }; illustration: Illustration }>('/api/forge', {
+    const result = await $fetch<{ card: CardDraft; adjustments: string[]; mode: 'demo' | 'ai'; reason?: string; quota?: { sessionRemaining: number; globalRemaining: number }; illustration: Illustration; draftToken: string }>('/api/forge', {
       method: 'POST', timeout: 40_000, retry: 0,
       headers: { 'X-Murgik-CSRF': modeData.value?.csrf || '', 'X-Murgik-Access-CSRF': props.accessCsrf },
       body: { matchId: game.value.id, requestId: forgeTicket.value.id, prompt: forgeTicket.value.prompt,
@@ -180,10 +193,10 @@ async function forge() {
     await new Promise(resolve => setTimeout(resolve, 900))
     if (version !== matchVersion.value) return
     modeData.value = { ...modeData.value, mode: result.mode, reason: result.reason, quota: result.quota ?? modeData.value?.quota }
-    if (dispatch({ type: 'forge', side: 'you', card: result.card })) {
-      rememberArt(result.card, result.illustration)
-      forgeResult.value = result; forgeTicket.value = null; forgePrompt.value = ''
-    }
+    rememberArt(result.card, result.illustration)
+    forgeDescription.value = forgeTicket.value.prompt
+    forgeResult.value = result; forgeName.value = result.card.name; forgeTicket.value = null; forgePrompt.value = ''
+    stopSound('forge')
   } catch (error: unknown) {
     stopSound('forge')
     const e = error as { statusCode?: number; data?: { statusMessage?: string } }
@@ -191,10 +204,29 @@ async function forge() {
     if (e.statusCode && ![409, 503].includes(e.statusCode)) forgeTicket.value = null
   } finally { forgeBusy.value = false; challengeToken.value = ''; challengeVersion.value++ }
 }
+async function confirmForge() {
+  if (!game.value || !forgeResult.value || !forgeNameValid.value || !forgeAvailable.value) return
+  const version = matchVersion.value, draft = forgeResult.value
+  forgeBusy.value = true; forgeError.value = ''
+  try {
+    const result = await $fetch<{ card: CardDraft }>('/api/forge/confirm', {
+      method: 'POST', retry: 0, timeout: 10_000, headers: { 'X-Murgik-Access-CSRF': props.accessCsrf },
+      body: { token: draft.draftToken, matchId: game.value.id, name: forgeName.value }
+    })
+    if (version !== matchVersion.value) return
+    if (dispatch({ type: 'forge', side: 'you', card: result.card })) {
+      rememberArt(result.card, draft.illustration)
+      forgeResult.value = null; forgeName.value = ''; forgeOpen.value = false
+    }
+  } catch (error: unknown) {
+    const e = error as { data?: { statusMessage?: string } }
+    forgeError.value = e.data?.statusMessage ?? 'Bekräftelsen kunde inte skickas. Förhandsvisningen finns kvar; inget nytt AI-anrop görs.'
+  } finally { forgeBusy.value = false }
+}
 // Reconcile one bounded bot action at a time. No unbounded game loop in the UI.
-watch([game, tutorial, introVisible, restartOpen], ([value]) => {
+watch([game, tutorial, introVisible, restartOpen, libraryOpen], ([value]) => {
   clearTimeout(timer)
-  if (!value || value.winner || tutorial.value || introVisible.value || restartOpen.value) return
+  if (!value || value.winner || tutorial.value || introVisible.value || restartOpen.value || libraryOpen.value) return
   const version = matchVersion.value
   const botTurn = value.active === 'bot' && !defending.value
   const botDefends = value.combat?.side === 'you'
@@ -232,17 +264,17 @@ watch(() => you.value?.life, (life, old) => { if (life !== undefined && old !== 
       </header>
 
       <main v-if="!game" class="landing">
-        <div class="landing-copy"><div class="eyebrow"><span/> TAKTIK MÖTER FANTASI <span/></div><h1>Världen är skriven.<br><em>Ändra den.</em></h1><p>En tanke. En gnista. Ett kort som aldrig funnits.<br>Smid din egen magi och vänd duellen.</p><div class="landing-cta"><button class="gold-button" :disabled="!clientReady" @click="start">Påbörja duell <RuneIcon name="arrow" :size="20"/></button><button class="text-button" @click="tutorial = true"><RuneIcon name="book" :size="17"/> Så spelar du</button></div><div class="landing-facts"><span><b>20</b> liv att försvara</span><span><b>3</b> kort att smida</span><span><b>∞</b> idéer att utforska</span></div></div>
+        <div class="landing-copy"><div class="eyebrow"><span/> TAKTIK MÖTER FANTASI <span/></div><h1>Världen är skriven.<br><em>Ändra den.</em></h1><p>En tanke. En gnista. Ett kort som aldrig funnits.<br>Smid din egen magi och vänd duellen.</p><DeckSelection v-model="deckChoice"/><div class="landing-cta"><button class="gold-button" :disabled="!clientReady" @click="start">Påbörja duell <RuneIcon name="arrow" :size="20"/></button><button class="text-button" @click="tutorial = true"><RuneIcon name="book" :size="17"/> Så spelar du</button><button class="text-button" @click="libraryOpen = true"><RuneIcon name="book" :size="17"/> Kortbibliotek</button></div><div class="landing-facts"><span><b>20</b> liv att försvara</span><span><b>3</b> kort att smida</span><span><b>∞</b> idéer att utforska</span></div></div>
         <div class="landing-showcase"><div class="showcase-ring"/><div class="floating-card left"><GameCard :card="catalog[1]!" display-only/></div><div class="floating-card right"><GameCard :card="catalog[3]!" display-only/></div><div class="floating-card front"><GameCard :card="{ ...catalog[10]!, name: 'Smedjans askdrake', forged: true, id: 'showcase' }" display-only/></div><div class="showcase-caption"><RuneIcon name="forge" :size="18"/><span>FÖDD UR DIN FANTASI</span></div></div>
-        <footer class="landing-footer"><span>ETT ORIGINALSPEL AV MURGIK <i>◆</i> PROOF OF CONCEPT</span><span>{{ mode === 'demo' ? 'Demoläge: smidet använder lokala recept. Inga AI-anrop.' : 'AI skapar kort. Spelmotorn bestämmer reglerna.' }}</span></footer>
+        <footer class="landing-footer"><span>ETT ORIGINALSPEL AV MURGIK <i>◆</i> PROOF OF CONCEPT</span><span>{{ mode === 'demo' ? 'Demoläge: fast övningskort utan fritexttolkning. Inga AI-anrop.' : 'AI skapar kort. Spelmotorn bestämmer reglerna.' }}</span></footer>
       </main>
 
       <main v-else class="game-layout">
         <aside class="left-rail">
-          <div class="arena-title"><span class="eyebrow">DUELL 01</span><h2>Asklunden</h2><p>Där gamla löften brinner.</p></div>
-          <div class="turn-panel"><span class="eyebrow">TUR {{ game.turn }}</span><strong>{{ game.active === 'you' ? 'Din tur' : 'Veyras tur' }}</strong><div class="phase-list"><div v-for="(label, key, i) in phaseNames" :key="key" :class="{ current: game.phase === key }"><span>{{ i + 1 }}</span>{{ label }}<i v-if="game.phase === key"/></div></div></div>
+          <div class="arena-title"><span class="eyebrow">DUELL 01</span><h2>Asklunden</h2><p>Där gamla löften brinner.</p><p v-if="yourDeck" class="deck-style-note">{{ yourDeck.name }}</p><button class="text-button library-arena-button" :disabled="forgeBusy" @click="libraryOpen = true"><RuneIcon name="book" :size="17"/>Kortbibliotek</button></div>
+          <div class="turn-panel"><span class="eyebrow">TUR {{ game.turn }}</span><strong>{{ game.active === 'you' ? 'Din tur' : 'Veyras tur' }}</strong><span v-if="preparation" class="preparation-note">Förberedelserunda</span><div class="phase-list"><div v-for="([key, label], i) in visiblePhases" :key="key" :class="{ current: game.phase === key }"><span>{{ i + 1 }}</span>{{ label }}<i v-if="game.phase === key"/></div></div></div>
           <div class="forge-panel"><div class="forge-heading"><RuneIcon name="forge" :size="25"/><span>Runornas smedja</span></div><p>Det bästa kortet finns kanske<br>inte ännu.</p><div class="charges"><span v-for="i in 3" :key="i" :class="{ charged: i <= (you?.charges ?? 0) }">◆</span><small>{{ you?.charges }} / 3 laddningar</small></div><button class="forge-button" :disabled="!forgeAvailable" @click="openForge"><RuneIcon name="forge" :size="19"/> SMID ETT KORT <span>↗</span></button><small>Ingen mana. Bara din fantasi.</small></div>
-          <div v-if="inspected" class="inspect-panel"><span class="eyebrow">{{ inspected.type === 'creature' ? 'VARELSE' : 'BESVÄRJELSE' }}</span><h3>{{ inspected.name }}</h3><p>{{ cardText(inspected) }}</p><div v-for="k in inspected.keywords" :key="k" class="keyword-help"><b>{{ keywordNames[k] }}</b> {{ keywordHelp[k] }}</div></div>
+          <div v-if="inspected" class="inspect-panel"><span class="eyebrow">{{ inspected.type === 'creature' ? 'VARELSE' : 'BESVÄRJELSE' }}</span><h3>{{ inspected.name }}</h3><p>{{ cardText(inspected) }}</p><p class="inspector-ruletext">{{ cardText(liveInspected) }}</p><div v-for="k in inspected.keywords" :key="k" class="keyword-help"><b>{{ keywordNames[k] }}</b> {{ keywordHelp[k] }}</div></div>
           <div v-else class="rail-note"><RuneIcon name="eye" :size="18"/><span>Håll pekaren över ett kort<br>för att läsa dess förmågor.</span></div>
         </aside>
 
@@ -252,28 +284,38 @@ watch(() => you.value?.life, (life, old) => { if (life !== undefined && old !== 
           <div class="opponent-zone"><button class="hero enemy-hero" data-entity-id="bot" :class="{ targetable: targets.includes('bot') }" :disabled="!targets.includes('bot')" aria-label="Veyra, motståndare. Välj som mål" @click="target('bot')"><div class="portrait enemy-portrait"><img src="/art/night-demon.jpg" alt="" width="64" height="64"/></div><div class="hero-name"><strong>Veyra</strong><small>SKYMNINGENS VÄKTARE</small></div><div class="life"><RuneIcon name="heart" :size="16"/><b>{{ enemy?.life }}</b></div></button><div class="enemy-resources"><span><RuneIcon name="mana" :size="14"/> {{ enemy?.mana }} / {{ enemy?.maxMana }}</span><span>{{ enemy?.deck.length }} i leken</span></div><div class="opponent-hand" :aria-label="`Motståndaren har ${enemy?.hand.length} kort`"><div v-for="n in enemy?.hand.length" :key="n" class="card-back" :style="{ transform: `rotate(${(n - ((enemy?.hand.length ?? 0) + 1) / 2) * 3}deg)` }"><span>ᛗ</span></div></div></div>
           <div class="unit-row enemy-row" :class="{ 'row-targetable': selected && targets.some(id => enemy?.board.some(c => c.id === id)) }"><div class="field-slots" aria-hidden="true"><i v-for="n in 6" :key="n">◇</i></div><span class="row-label">MOTSTÅNDARENS SLAGFÄLT</span><TransitionGroup name="unit"><div v-for="unit in enemy?.board" :key="unit.id" class="unit-wrap" :class="{ attacking: game.combat?.attackers.includes(unit.id) }"><GameCard :card="unit" compact :targetable="targets.includes(unit.id) || !!(defending && selectedBlocker && game.combat?.attackers.includes(unit.id) && canBlock(unit, you!.board.find(c => c.id === selectedBlocker)!))" @click="unitClick(unit, 'bot')" @mouseenter="inspected = unit" @focus="inspected = unit"/><span v-if="blockLabel(unit.id)" class="block-tag">⛨ {{ blockLabel(unit.id) }}</span></div></TransitionGroup><div v-if="!enemy?.board.length" class="empty-field"><span>◇</span> Skuggorna väntar</div></div>
           <div class="battle-divider"><span/><div class="arena-sigil">ᛗ</div><span/><div class="battle-status" aria-live="polite">{{ defending ? 'FÖRSVARA DIG' : game.combat ? 'STRID PÅGÅR' : game.active === 'you' ? 'DITT DRAG' : 'MOTSTÅNDARENS DRAG' }}</div></div>
-          <div class="unit-row player-row" :class="{ 'row-targetable': selected && targets.some(id => you?.board.some(c => c.id === id)) }"><div class="field-slots" aria-hidden="true"><i v-for="n in 6" :key="n">◇</i></div><span class="row-label">DITT SLAGFÄLT <span>{{ you?.board.length }} / 6</span></span><TransitionGroup name="unit"><div v-for="unit in you?.board" :key="unit.id" class="unit-wrap" :class="{ attacking: game.combat?.attackers.includes(unit.id) }"><GameCard :card="unit" compact :selected="attackers.includes(unit.id) || selectedBlocker === unit.id || !!(game.combat && Object.values(game.combat.blocks).includes(unit.id))" :playable="game.active === 'you' && game.phase === 'combat' && canAttack(unit) && !game.combat" :targetable="targets.includes(unit.id) || !!(defending && !unit.stunned)" @click="unitClick(unit, 'you')" @mouseenter="inspected = unit" @focus="inspected = unit"/></div></TransitionGroup><div v-if="!you?.board.length" class="empty-field"><span>◇</span> Din berättelse börjar här</div></div>
+          <div class="unit-row player-row" :class="{ 'row-targetable': selected && targets.some(id => you?.board.some(c => c.id === id)) }"><div class="field-slots" aria-hidden="true"><i v-for="n in 6" :key="n">◇</i></div><span class="row-label">DITT SLAGFÄLT <span>{{ you?.board.length }} / 6</span></span><TransitionGroup name="unit"><div v-for="unit in you?.board" :key="unit.id" class="unit-wrap" :class="{ attacking: game.combat?.attackers.includes(unit.id) }"><GameCard :card="unit" compact :selected="attackers.includes(unit.id) || selectedBlocker === unit.id || !!(game.combat && Object.values(game.combat.blocks).includes(unit.id))" :playable="game.phase === 'combat' && yourAttackers.some(c => c.id === unit.id)" :targetable="targets.includes(unit.id) || !!(defending && !unit.stunned)" @click="unitClick(unit, 'you')" @mouseenter="inspected = unit" @focus="inspected = unit"/></div></TransitionGroup><div v-if="!you?.board.length" class="empty-field"><span>◇</span> Din berättelse börjar här</div></div>
           <div class="player-zone"><div class="hero player-hero" data-entity-id="you" :class="{ 'damage-flash': heroFlash }"><div class="portrait player-portrait"><img src="/art/dawn-knight.jpg" alt="" width="64" height="64"/></div><div class="hero-name"><strong>Runsmeden</strong><small>DIN FANTASI. DINA REGLER.</small></div><div class="life"><RuneIcon name="heart" :size="16"/><b>{{ you?.life }}</b></div></div><div class="mana-panel"><div class="mana-caption"><RuneIcon name="mana" :size="16"/><strong>{{ you?.mana }} <span>/ {{ you?.maxMana }}</span></strong><small>MANA</small></div><div class="mana-crystals"><i v-for="i in 10" :key="i" :class="{ unlocked: i <= (you?.maxMana ?? 0), filled: i <= (you?.mana ?? 0) }"/></div></div><div class="deck-indicator"><RuneIcon name="book" :size="18"/><b>{{ you?.deck.length }}</b><small>KORT I LEKEN</small></div></div>
           <div class="hand-zone"><span class="hand-label">DIN HAND <i>{{ you?.hand.length }} / 10</i></span><TransitionGroup name="hand"><GameCard v-for="card in you?.hand" :key="card.id" :card="card" :selected="selectedCard === card.id" :playable="canPlay(game, 'you', card)" :disabled="forgeBusy" :data-card-id="card.id" :data-forged="card.forged || undefined" @click="play(card)" @mouseenter="inspected = card" @focus="inspected = card"/></TransitionGroup><div v-if="!you?.hand.length" class="empty-hand">Handen är tom. Nästa tur ger nya möjligheter.</div></div>
         </section>
 
-        <aside class="right-rail"><div class="duel-info"><span class="eyebrow">DIN MOTSTÅNDARE</span><h3>Veyra</h3><p>En uråldrig väktare.<br>En obeveklig vilja.</p><span class="bot-label"><span class="live-dot"/> REGELSTYRD BOT</span></div><div v-if="inspected" class="card-inspector"><div class="eyebrow">KORTETS FÖRMÅGOR</div><GameCard :card="{ ...liveInspected, id: 'inspector-preview' }" display-only/><div v-for="k in inspected.keywords" :key="k" class="keyword-help"><b>{{ keywordNames[k] }}</b> {{ keywordHelp[k] }}</div></div><div class="chronicle"><div class="chronicle-heading"><RuneIcon name="book" :size="17"/><span>DUELLENS KRÖNIKA</span></div><div class="log-list" aria-live="polite" aria-relevant="additions"><div v-for="entry in [...game.log].reverse().slice(0, 10)" :key="entry.id" class="log-entry" :class="entry.kind"><i/>{{ entry.text }}</div></div></div><div class="action-panel"><div v-if="game.active === 'bot' || game.combat?.side === 'you'" class="bot-action-status" role="status"><i/><span>{{ botMessage || 'Veyra betraktar slagfältet…' }}</span></div><div class="action-hint">{{ hint }}</div><button v-if="selected" class="cancel-target" @click="selectedCard = null">Avbryt målval <span>ESC</span></button><button class="next-button" :class="{ 'defend-button': defending }" :disabled="forgeBusy || !!game.winner || (game.active === 'bot' && !defending) || (!!game.combat && !defending)" @click="next">{{ nextLabel }}<RuneIcon :name="defending ? 'shield' : 'arrow'" :size="18"/></button><span class="phase-caption">{{ defending ? 'Varje varelse kan blockera en fiende.' : phaseNames[game.phase] }}</span></div></aside>
+        <aside class="right-rail"><div class="duel-info"><span class="eyebrow">DIN MOTSTÅNDARE</span><h3>Veyra</h3><p>En uråldrig väktare.<br>En obeveklig vilja.</p><p v-if="enemyDeck" class="deck-style-note">{{ enemyDeck.name }}</p><span class="bot-label"><span class="live-dot"/> REGELSTYRD BOT</span></div><div v-if="inspected" class="card-inspector"><div class="eyebrow">KORTETS FÖRMÅGOR</div><GameCard :card="{ ...liveInspected, id: 'inspector-preview' }" display-only/><p class="inspector-ruletext">{{ cardText(liveInspected) }}</p><div v-for="k in inspected.keywords" :key="k" class="keyword-help"><b>{{ keywordNames[k] }}</b> {{ keywordHelp[k] }}</div></div><div class="chronicle"><div class="chronicle-heading"><RuneIcon name="book" :size="17"/><span>DUELLENS KRÖNIKA</span></div><div class="log-list" aria-live="polite" aria-relevant="additions"><div v-for="entry in [...game.log].reverse().slice(0, 10)" :key="entry.id" class="log-entry" :class="entry.kind"><i/>{{ entry.text }}</div></div></div><div class="action-panel"><div v-if="game.active === 'bot' || game.combat?.side === 'you'" class="bot-action-status" role="status"><i/><span>{{ botMessage || 'Veyra betraktar slagfältet…' }}</span></div><div class="action-hint">{{ hint }}</div><button v-if="selected" class="cancel-target" @click="selectedCard = null">Avbryt målval <span>ESC</span></button><button class="next-button" :class="{ 'defend-button': defending }" :disabled="forgeBusy || !!game.winner || (game.active === 'bot' && !defending) || (!!game.combat && !defending)" @click="next">{{ nextLabel }}<RuneIcon :name="defending ? 'shield' : 'arrow'" :size="18"/></button><span class="phase-caption">{{ defending ? 'Varje varelse kan blockera en fiende.' : phaseNames[game.phase] }}</span></div></aside>
           <div v-if="notice" class="toast" role="status"><RuneIcon name="spark" :size="17"/>{{ notice }}</div>
         </main>
       <UModal v-model:open="forgeOpen" title="Runornas smedja" description="Sätt ord på din magi. Smedjan ger den form." :dismissible="!forgeBusy" :close="!forgeBusy" :ui="{ content: 'forge-modal' }">
         <template #body>
-          <div v-if="forgeResult" class="forge-success"><div class="eyebrow">ETT NYTT KORT HAR FÖTTS</div><div class="forged-reveal"><GameCard :card="{ ...forgeResult.card, id: 'preview', forged: true }" display-only/></div><h3>{{ forgeResult.card.name }}</h3><p>Kortet finns nu i din hand. {{ forgeResult.card.cost <= (you?.mana ?? 0) ? 'Du har mana att spela det direkt.' : `Det kostar ${forgeResult.card.cost} mana. Spara det till en kommande tur.` }}</p><div class="art-summary"><RuneIcon name="eye" :size="17"/><span>{{ resultArt?.status === 'ready' ? 'Din illustration är färdig och cachad.' : resultArt?.status === 'queued' || resultArt?.status === 'generating' ? 'Illustrationen skapas i bakgrunden. Spela kortet redan nu.' : resultArt?.status === 'failed' ? 'Bildgenereringen misslyckades. Kortet använder en originalillustration.' : 'Originalillustration ur Murgiks bildbibliotek.' }}</span></div><div class="balance-note"><RuneIcon name="shield" :size="17"/><span>{{ forgeResult.adjustments.join(' ') || 'Validerat och balanserat av Murgiks regelmotor.' }}</span></div></div>
-          <div v-else class="forge-form"><p v-if="modeData?.reason" class="modal-footnote" role="status">{{ modeData.reason }}</p><p v-if="mode === 'ai' && modeData?.quota" class="modal-footnote">{{ modeData.quota.sessionRemaining }} AI-kort kvar i sessionen · {{ modeData.quota.globalRemaining }} försök kvar i POC:en.</p><ForgeChallenge v-if="mode === 'ai' && modeData?.siteKey" :key="challengeVersion" :site-key="modeData.siteKey" @token="challengeToken = $event"/><div class="mode-notice"><span class="live-dot"/><span>{{ mode === 'demo' ? 'DEMONSTRATION · LOKAL GENERATOR, INGEN AI' : 'OPENAI · STRUKTURERAT OCH SERVERVALIDERAT' }}</span></div><label for="forge-prompt">Vilket kort behöver du?</label><textarea id="forge-prompt" v-model="forgePrompt" :disabled="forgeBusy || !!forgeTicket" placeholder="En elddrake som skadar alla fiender när den landar…" maxlength="500" rows="4" @keydown.ctrl.enter.prevent="forge"/><div class="prompt-meta"><span>En idé räcker. Balansen sköter smedjan.</span><span>{{ forgePrompt.length }} / 500</span></div><div class="suggestions"><button v-for="s in suggestions" :key="s.name" :disabled="forgeBusy || !!forgeTicket" @click="forgePrompt = s.text"><RuneIcon :name="s.icon" :size="16"/>{{ s.name }}</button></div><div class="forge-rules"><RuneIcon name="forge" :size="24"/><p><b>1 laddning. Ingen mana.</b><br>Du betalar kortets mana när du spelar det. {{ you?.charges }} laddningar kvar.</p></div><div v-if="forgeBusy" class="forging-progress" role="status"><div class="forge-vortex"><i/><i/><i/><span>ᛗ</span><b v-for="n in 12" :key="n" :style="{ '--spark': n }"/></div><strong>Din tanke får liv</strong><span>Runorna binds. Kraften balanseras.</span></div><p v-if="forgeError" class="error-message" role="alert">{{ forgeError }}</p></div>
+          <div v-if="forgeResult && previewCard" class="forge-success">
+            <div class="eyebrow">{{ forgeResult.mode === 'demo' ? 'ÖVNINGSKORT · UTAN FRITEXTTOLKNING' : 'DIN IDÉ HAR FÅTT FORM' }}</div><p class="forge-original-idea">”{{ forgeDescription }}”</p>
+            <p class="forge-art-notice">Återanvänd illustration – motivet kan avvika från din idé.</p>
+            <div class="forged-reveal"><GameCard :card="{ ...previewCard, id: 'preview', forged: true }" display-only/></div>
+            <div class="forge-name-editor"><label for="forge-card-name">Kortets namn <span>{{ forgeName.length }} / {{ CARD_NAME_MAX }}</span></label><input id="forge-card-name" v-model="forgeName" :maxlength="CARD_NAME_MAX" :disabled="forgeBusy" :aria-invalid="!forgeNameValid" aria-describedby="forge-name-help" autocomplete="off"/><p id="forge-name-help" :class="{ 'error-message': !forgeNameValid }">{{ CARD_NAME_HELP }} Namnet ändras utan nytt AI-anrop.</p><button class="text-button" :disabled="forgeBusy || forgeName === forgeResult.card.name" @click="forgeName = forgeResult.card.name">Återställ föreslaget namn</button></div>
+            <p class="forge-identity">{{ previewCard.flavor }}</p>
+            <div class="forge-preview-facts"><span>{{ previewCard.type === 'creature' ? 'Varelse' : 'Besvärjelse' }}</span><span>{{ previewCard.cost }} mana</span><span v-if="previewCard.type === 'creature'">{{ previewCard.attack }} attack / {{ previewCard.health }} hälsa</span></div>
+            <div class="forge-interpretation"><h4>Kortets faktiska effekt</h4><p>{{ cardText(previewCard) }}</p><p v-for="keyword in previewCard.keywords" :key="keyword"><b>{{ keywordNames[keyword] }}:</b> {{ keywordHelp[keyword] }}</p></div>
+            <div class="balance-note"><RuneIcon name="shield" :size="17"/><div><b>Tolkning & anpassningar</b><ul><li v-for="(adjustment, index) in forgeResult.adjustments" :key="index">{{ adjustment }}</li><li v-if="!forgeResult.adjustments.length">Validerat och balanserat av Murgiks regelmotor.</li></ul></div></div>
+            <div class="art-summary"><RuneIcon name="eye" :size="17"/><span>Återanvänd originalillustration; motivet kan avvika från din idé. Ingen ny bild genereras.</span></div>
+            <p>Bekräfta för att lägga kortet i handen och använda en smidesladdning. AI-försöket räknas när förhandsvisningen skapas.</p>
+            <p v-if="forgeError" class="error-message" role="alert">{{ forgeError }}</p>
+          </div>
+          <div v-else class="forge-form"><p v-if="modeData?.reason" class="modal-footnote" role="status">{{ modeData.reason }}</p><p v-if="mode === 'ai' && modeData?.quota" class="modal-footnote">{{ modeData.quota.sessionRemaining }} AI-kort kvar i sessionen · {{ modeData.quota.globalRemaining }} försök kvar i POC:en.</p><ForgeChallenge v-if="mode === 'ai' && modeData?.siteKey" :key="challengeVersion" :site-key="modeData.siteKey" @token="challengeToken = $event"/><div class="mode-notice"><span class="live-dot"/><span>{{ mode === 'demo' ? 'DEMONSTRATION · FAST ÖVNINGSKORT, INGEN AI' : 'OPENAI · STRUKTURERAT OCH SERVERVALIDERAT' }}</span></div><label for="forge-prompt">Vilket kort behöver du?</label><textarea id="forge-prompt" v-model="forgePrompt" :disabled="forgeBusy || !!forgeTicket" placeholder="Beskriv din idé, vad den gör och vilka den påverkar…" maxlength="500" rows="4" @keydown.ctrl.enter.prevent="forge"/><div class="prompt-meta"><span>En idé räcker. Balansen sköter smedjan.</span><span>{{ forgePrompt.length }} / 500</span></div><div class="suggestions"><button v-for="s in suggestions" :key="s.name" :disabled="forgeBusy || !!forgeTicket" @click="forgePrompt = s.text"><RuneIcon :name="s.icon" :size="16"/>{{ s.name }}</button></div><div class="forge-rules"><RuneIcon name="forge" :size="24"/><p><b>1 laddning. Ingen mana.</b><br>Du betalar kortets mana när du spelar det. {{ you?.charges }} laddningar kvar.</p></div><div v-if="forgeBusy" class="forging-progress" role="status"><div class="forge-vortex"><i/><i/><i/><span>ᛗ</span><b v-for="n in 12" :key="n" :style="{ '--spark': n }"/></div><strong>Din tanke får liv</strong><span>Runorna binds. Kraften balanseras.</span></div><p v-if="forgeError" class="error-message" role="alert">{{ forgeError }}</p></div>
         </template>
-        <template #footer><button v-if="forgeResult" class="gold-button modal-primary" @click="forgeOpen = false">Till min hand <RuneIcon name="arrow" :size="18"/></button><template v-else><span class="modal-footnote">{{ mode === 'demo' ? 'Ingen API-nyckel används.' : 'Ett AI-anrop görs först när du smider.' }}</span><button class="gold-button" :disabled="forgeBusy || forgePrompt.trim().length < 3 || !forgeAvailable || (mode === 'ai' && !modeData?.privateForge && !challengeToken)" @click="forge"><RuneIcon name="forge" :size="18"/>{{ forgeBusy ? 'Smider…' : forgeTicket ? 'Försök igen' : 'Smid kortet' }}</button></template></template>
+        <template #footer><template v-if="forgeResult"><button class="text-button" :disabled="forgeBusy" @click="forgePrompt = forgeDescription; forgeResult = null; forgeName = ''; forgeError = ''">Ändra idén</button><button class="gold-button modal-primary" :disabled="forgeBusy || !forgeNameValid || !forgeAvailable" @click="confirmForge">{{ forgeBusy ? 'Bekräftar…' : 'Till min hand' }} <RuneIcon name="arrow" :size="18"/></button></template><template v-else><span class="modal-footnote">{{ mode === 'demo' ? 'Ingen API-nyckel används.' : 'Ett AI-anrop görs först när du smider.' }}</span><button class="gold-button" :disabled="forgeBusy || forgePrompt.trim().length < 3 || !forgeAvailable || (mode === 'ai' && !modeData?.privateForge && !challengeToken)" @click="forge"><RuneIcon name="forge" :size="18"/>{{ forgeBusy ? 'Smider…' : forgeTicket ? 'Försök igen' : 'Smid kortet' }}</button></template></template>
       </UModal>
       <RulesGuide v-model:open="tutorial" :in-match="!!game"/>
-      <UModal v-model:open="restartOpen" title="En ny berättelse?" description="Din nuvarande duell avslutas och en ny match börjar." :ui="{ content: 'small-modal' }"><template #footer><button class="text-button" @click="restartOpen = false">Fortsätt duellen</button><button class="gold-button" :disabled="forgeBusy" @click="start">Starta ny match</button></template></UModal>
+      <CardLibrary v-model:open="libraryOpen"/>
+      <UModal v-model:open="restartOpen" title="En ny berättelse?" description="Din nuvarande duell avslutas och en ny match börjar." :ui="{ content: 'small-modal' }"><template #body><DeckSelection id="restart-deck-choice" v-model="deckChoice"/></template><template #footer><button class="text-button" @click="restartOpen = false">Fortsätt duellen</button><button class="gold-button" :disabled="forgeBusy" @click="start">Starta ny match</button></template></UModal>
       <div v-if="game?.winner" class="game-over-backdrop"><section class="game-over" role="dialog" aria-modal="true" aria-labelledby="winner-title" tabindex="-1"><div class="victory-rune"><RuneIcon :name="game.winner === 'you' ? 'crown' : 'shield'" :size="52"/></div><div class="eyebrow">DUELLEN ÄR AVGJORD</div><h2 id="winner-title">{{ game.winner === 'you' ? 'Ditt öde. Din seger.' : game.winner === 'draw' ? 'Två öden. En aska.' : 'Även aska kan glöda.' }}</h2><p>{{ game.winner === 'you' ? 'Veyra faller. En ny berättelse börjar med ditt namn.' : game.winner === 'draw' ? 'Båda hjältarna föll i samma ögonblick.' : 'Veyra vann denna gång. Smedjan väntar på din återkomst.' }}</p><div class="result-stats"><span><b>{{ game.turn }}</b> TURER</span><span><b>{{ 3 - game.players.you.charges }}</b> KORT SMIDDA</span><span><b>{{ game.players.you.life }}</b> LIV KVAR</span></div><button class="gold-button" autofocus @click="start">Spela igen <RuneIcon name="restart" :size="18"/></button></section></div>
-      <BattleEffects :effects="effects"/><Transition name="bot-reveal"><div v-if="botCard && !tutorial" class="bot-card-reveal" aria-hidden="true"><span>VEYRA SPELAR</span><GameCard :card="{ ...botCard, id: 'bot-preview' }" display-only/></div></Transition>
+      <BattleEffects :effects="effects"/><Transition name="bot-reveal"><div v-if="botCard && !tutorial && !libraryOpen" class="bot-card-reveal" aria-hidden="true"><span>VEYRA SPELAR</span><GameCard :card="{ ...botCard, id: 'bot-preview' }" display-only/></div></Transition>
     </div>
   </UApp>
 </template>
-
-
-

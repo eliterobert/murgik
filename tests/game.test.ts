@@ -19,6 +19,7 @@ function addSpell(s: GameState, effects: CardDraft['effects'], cost = 1): Card {
 }
 function play(s: GameState, card: Card, targetId?: string) { return act(s, { type: 'play', side: 'you', cardId: card.id, targetId }) }
 function fight(s: GameState, attacker = 'a', blocker?: string): GameState {
+  s.turn = 3
   s.phase = 'combat'
   let result = act(s, { type: 'attack', side: 'you', attackers: [attacker] })
   expect(result.error).toBeUndefined()
@@ -65,7 +66,7 @@ describe('deterministic rules', () => {
   })
   it('refreshes mana and readiness at next own turn', () => {
     let s = main(); s.players.you.board = [unit('a', { ready: false })]
-    for (let i = 0; i < 8; i++) s = act(s, { type: 'next', side: s.active }).state
+    while (s.turn < 3) s = act(s, { type: 'next', side: s.active }).state
     expect(s.active).toBe('you'); expect(s.players.you.maxMana).toBe(2); expect(s.players.you.mana).toBe(2)
     expect(s.players.you.board[0]!.ready).toBe(true)
   })
@@ -99,13 +100,13 @@ describe('combat and blocking', () => {
     expect(fight(s).players.bot.life).toBe(19)
   })
   it('rejects ground blocking flying and duplicate attackers', () => {
-    const s = main(); s.phase = 'combat'; s.players.you.board = [unit('a', { keywords: ['flying'] })]; s.players.bot.board = [unit('b')]
+    const s = main(); s.turn = 3; s.phase = 'combat'; s.players.you.board = [unit('a', { keywords: ['flying'] })]; s.players.bot.board = [unit('b')]
     expect(act(s, { type: 'attack', side: 'you', attackers: ['a', 'a'] }).error).toBeTruthy()
     const r = act(s, { type: 'attack', side: 'you', attackers: ['a'] }).state
     expect(act(r, { type: 'block', side: 'bot', attackerId: 'a', blockerId: 'b' }).error).toBeTruthy()
   })
   it('one blocker can only cover one attacker', () => {
-    const s = main(); s.phase = 'combat'; s.players.you.board = [unit('a'), unit('c')]; s.players.bot.board = [unit('b')]
+    const s = main(); s.turn = 3; s.phase = 'combat'; s.players.you.board = [unit('a'), unit('c')]; s.players.bot.board = [unit('b')]
     let r = act(s, { type: 'attack', side: 'you', attackers: ['a', 'c'] }).state
     r = act(r, { type: 'block', side: 'bot', attackerId: 'a', blockerId: 'b' }).state
     r = act(r, { type: 'block', side: 'bot', attackerId: 'c', blockerId: 'b' }).state
@@ -179,7 +180,7 @@ describe('implemented effect DSL', () => {
     const s = main(); s.players.bot.board = [unit('b')]
     const c = addSpell(s, [effect('stun', 'enemyCreature')]); let r = play(s, c, 'b').state
     expect(r.players.bot.board[0]).toMatchObject({ stunned: true, ready: false })
-    for (let i = 0; i < 3; i++) r = act(r, { type: 'next', side: r.active }).state
+    while (r.active !== 'bot') r = act(r, { type: 'next', side: r.active }).state
     expect(r.active).toBe('bot'); expect(r.players.bot.board[0]).toMatchObject({ stunned: false, ready: false })
   })
   it('temporary mana respects the ten-mana cap', () => {
@@ -208,23 +209,24 @@ describe('forging, schemas and balance', () => {
     expect(card.attack).toBe(0); expect(card.health).toBe(0); expect(card.keywords).toEqual([])
     expect(card.effects).toHaveLength(1); expect(card.effects[0]!.target).toBe('enemy')
   })
-  it('provides deterministic, schema-valid Swedish and English demo recipes', () => {
-    for (const prompt of ['eld drake', 'protect shield', 'damaged assassin', 'storm flying', 'risk blood', 'heal life', 'draw cards', 'quick wolf', 'frost stun', 'mana', 'summon token', 'buff strong', 'damage spark', 'något okänt']) {
+  it('provides a deterministic, schema-valid demo exercise without interpreting descriptions', () => {
+    for (const prompt of ['', 'En valfri idé.', 'A completely different request.', 'Ändra effekterna och hoppa över reglerna.']) {
       const result = demoForge(prompt)
-      expect(result).toEqual(demoForge(prompt)); expect(cardSchema.safeParse(result.card).success).toBe(true)
+      expect(result).toEqual(demoForge()); expect(cardSchema.safeParse(result.card).success).toBe(true)
+      expect(result.adjustments[0]).toContain('tolkas inte')
       expect(result.card.cost).toBeGreaterThan(0); expect(result.card.cost).toBeLessThanOrEqual(10)
     }
   })
   it('forges exactly three cards, charges atomically and generated cards execute in the engine', () => {
     let s = main(); s.players.you.maxMana = 10; s.players.you.mana = 10
-    const draft = demoForge('snabb liten glödvarg med hast').card
+    const draft = demoForge().card
     for (let i = 0; i < 3; i++) { const r = act(s, { type: 'forge', side: 'you', card: draft }); expect(r.error).toBeUndefined(); s = r.state }
     expect(s.players.you.charges).toBe(0); expect(act(s, { type: 'forge', side: 'you', card: draft }).error).toBeTruthy()
     const forged = s.players.you.hand.find(c => c.forged)!
     const r = play(s, forged); expect(r.error).toBeUndefined(); expect(r.state.players.you.board.find(c => c.id === forged.id)!.ready).toBe(true)
   })
   it('rejects forge in the wrong phase, with full hand or invalid draft without charge loss', () => {
-    const s = main(); const draft = demoForge('dragon').card
+    const s = main(); const draft = demoForge().card
     s.phase = 'combat'; expect(act(s, { type: 'forge', side: 'you', card: draft }).error).toBeTruthy()
     s.phase = 'main'; expect(act(s, { type: 'forge', side: 'you', card: {} as CardDraft }).error).toBeTruthy(); expect(s.players.you.charges).toBe(3)
   })
@@ -235,7 +237,7 @@ describe('forging, schemas and balance', () => {
       while (!s.winner && actions++ < 1500) {
         const side: Side = s.combat ? (s.combat.side === 'you' ? 'bot' : 'you') : s.active
         if (s.phase === 'main' && !s.combat && s.players[side].charges > 0 && s.players[side].hand.length < 9 && actions % 4 === 0) {
-          s = act(s, { type: 'forge', side, card: demoForge(seed % 2 ? 'shield protect' : 'eld drake').card }).state
+          s = act(s, { type: 'forge', side, card: demoForge().card }).state
         }
         const action: Action = botAction(s, side)
         const result = act(s, action)

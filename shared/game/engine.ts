@@ -1,4 +1,6 @@
-import { catalog } from './catalog'
+import { buildDeck, generateDeck, openingOrder, styleIds } from './decks'
+import type { DeckChoice } from './decks'
+import { baseCardById } from './library'
 import { balanceCard } from './balance'
 import { MAX_BOARD, MAX_HAND, other } from './types'
 import type { Action, ActionResult, Card, CardDraft, Creature, Effect, GameState, Player, Side } from './types'
@@ -11,21 +13,23 @@ function rng(s: GameState): number {
   s.seed = (Math.imul(1664525, s.seed) + 1013904223) >>> 0
   return s.seed / 4294967296
 }
-function newCard(s: GameState, draft: CardDraft, forged = false): Card {
-  return { ...structuredClone(draft), id: `${s.id}-${++s.sequence}`, forged }
+function newCard(s: GameState, draft: CardDraft, forged = false, baseId?: string): Card {
+  return { ...structuredClone(draft), id: `${s.id}-${++s.sequence}`, forged, ...(baseId ? { baseId } : {}) }
 }
 function emptyPlayer(): Player {
   return { life: 20, mana: 0, maxMana: 0, deck: [], hand: [], board: [], graveyard: [], charges: 3, fatigue: 0 }
 }
-export function createGame(id = 'murgik', seed = 2026): GameState {
+export function createGame(id = 'murgik', seed = 2026, options: { deck?: DeckChoice; botDeck?: DeckChoice } = {}): GameState {
   const s: GameState = { id, seed, sequence: 0, turn: 1, active: 'you', phase: 'draw', players: { you: emptyPlayer(), bot: emptyPlayer() }, combat: null, winner: null, log: [] }
   for (const side of ['you', 'bot'] as const) {
-    // A curated opening teaches mana, targeted spells and guarding; the remaining deck is seeded.
-    const opening = [0, 1, 2, 3]
-    const rest = [...catalog, ...catalog].map(d => newCard(s, d))
-    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(rng(s) * (i + 1)); [rest[i], rest[j]] = [rest[j]!, rest[i]!] }
-    s.players[side].hand = opening.map(i => newCard(s, catalog[i]!))
-    s.players[side].deck = rest
+    const deckSeed = Math.floor(rng(s) * 0xFFFFFFFF)
+    const otherStyles = styleIds.filter(style => style !== s.players.you.deckStyle)
+    const definition = side === 'you' ? buildDeck(options.deck ?? 'random', deckSeed)
+      : options.botDeck ? buildDeck(options.botDeck, deckSeed) : generateDeck(deckSeed, otherStyles[Math.floor(rng(s) * otherStyles.length)]!)
+    const cards = openingOrder(definition.cardIds, Math.floor(rng(s) * 0xFFFFFFFF)).map(baseId => newCard(s, baseCardById.get(baseId)!.card, false, baseId))
+    s.players[side].deckStyle = definition.style
+    s.players[side].hand = cards.splice(0, 4)
+    s.players[side].deck = cards
   }
   startTurn(s, 'you', false)
   log(s, 'Duellen börjar. Smid ditt eget öde.')
@@ -97,7 +101,11 @@ function hit(s: GameState, targetId: string, amount: number): number {
   const c = creature(s, targetId)
   if (!c || c.currentHealth <= 0) return 0
   if (c.shield) { c.shield = false; log(s, `${c.name}: skölden absorberar skadan.`); return 0 }
-  const actual = Math.min(c.currentHealth, amount); c.currentHealth -= amount; return actual
+  const actual = Math.min(c.currentHealth, amount); c.currentHealth -= amount
+  if (actual > 0 && c.currentHealth > 0 && c.keywords.includes('enrage') && c.attack < 10) {
+    c.attack++; log(s, `${c.name}: Raseri ger +1 attack.`)
+  }
+  return actual
 }
 function applyEffect(s: GameState, side: Side, e: Effect, sourceId: string, targetId?: string) {
   const p = s.players[side], enemy = other(side)
@@ -107,17 +115,19 @@ function applyEffect(s: GameState, side: Side, e: Effect, sourceId: string, targ
       const target = e.target === 'player' ? side : e.target === 'opponent' ? enemy : targetId!
       hit(s, target, e.amount); log(s, `${e.amount} magisk skada.`, 'damage'); break
     }
-    case 'damageAll': for (const c of targets) hit(s, c.id, e.amount); log(s, `Askstormen gör ${e.amount} områdesskada.`, 'damage'); break
-    case 'healPlayer': p.life = Math.min(20, p.life + e.amount); break
-    case 'healCreature': for (const c of targets) c.currentHealth = Math.min(c.maxHealth, c.currentHealth + e.amount); break
+    case 'damageAll': for (const c of targets) hit(s, c.id, e.amount); log(s, `Områdeseffekten gör ${e.amount} skada på fiendevarelser.`, 'damage'); break
+    case 'healPlayer': { const amount=Math.min(20-p.life,e.amount); p.life += amount; if(amount>0)log(s,`${side==='you'?'Din hjälte':'Veyra'} återfår ${amount} liv.`); break }
+    case 'healCreature': for (const c of targets) { const amount=Math.min(c.maxHealth-c.currentHealth,e.amount);c.currentHealth += amount;if(amount>0)log(s,`${c.name} läker ${amount} skada.`) } break
     case 'draw': draw(s, side, e.amount); break
     case 'summon': {
       for (let i = 0; i < e.amount && p.board.length < MAX_BOARD; i++) spawn(s, side, newCard(s, { name: 'Glödande', type: 'creature', cost: 1, attack: 1, health: 1, theme: 'ember', keywords: [], effects: [], flavor: 'En gnista med egen vilja.', artPrompt: 'ember spirit' }))
       break
     }
     case 'buff': for (const c of targets) {
+      const attackGain = Math.min(10-c.attack,e.amount)
       c.attack = Math.min(10, c.attack + e.amount)
       const gain = Math.min(10 - c.maxHealth, e.secondary); c.maxHealth += gain; c.currentHealth += gain
+      log(s,`${c.name} förstärks med +${attackGain}/+${gain}.`)
     } break
     case 'shield': for (const c of targets) c.shield = true; break
     case 'destroyDamaged': for (const c of targets) if (c.currentHealth < c.maxHealth) c.currentHealth = 0; break
@@ -127,6 +137,12 @@ function applyEffect(s: GameState, side: Side, e: Effect, sourceId: string, targ
   cleanup(s)
 }
 export function canAttack(c: Creature): boolean { return c.ready && !c.stunned && c.attack > 0 }
+export function isPreparationTurn(s: GameState): boolean { return s.turn <= 2 }
+/** Shared eligibility for turn progression, attack validation, the UI and the bot. */
+export function availableAttackers(s: GameState, side: Side = s.active): Creature[] {
+  if (s.winner || s.combat || s.active !== side || isPreparationTurn(s) || !['main', 'combat'].includes(s.phase)) return []
+  return s.players[side].board.filter(canAttack)
+}
 export function canBlock(attacker: Creature, blocker: Creature): boolean {
   return !blocker.stunned && (!attacker.keywords.includes('flying') || blocker.keywords.includes('flying'))
 }
@@ -145,7 +161,9 @@ function resolveCombat(s: GameState) {
     if (!a || a.currentHealth <= 0) continue
     const b = defending.board.find(c => c.id === combat.blocks[aId])
     if (b) {
-      const dealt = hit(s, b.id, a.attack), returned = hit(s, a.id, b.attack)
+      // Both strikes use the attack values before either damage event triggers Raseri.
+      const attack = a.attack, counterattack = b.attack
+      const dealt = hit(s, b.id, attack), returned = hit(s, a.id, counterattack)
       if (a.keywords.includes('lifesteal')) attacking.life = Math.min(20, attacking.life + dealt)
       if (b.keywords.includes('lifesteal')) defending.life = Math.min(20, defending.life + returned)
       log(s, `${a.name} möter ${b.name}.`, 'damage')
@@ -179,8 +197,14 @@ export function act(original: GameState, action: Action): ActionResult {
   switch (action.type) {
     case 'next': {
       if (s.phase === 'draw') s.phase = 'main'
-      else if (s.phase === 'main') s.phase = 'combat'
-      else if (s.phase === 'combat') s.phase = 'end'
+      else if (s.phase === 'main') {
+        if (availableAttackers(s, action.side).length) s.phase = 'combat'
+        else startTurn(s, other(action.side))
+      }
+      else if (s.phase === 'combat') {
+        if (availableAttackers(s, action.side).length) s.phase = 'end'
+        else startTurn(s, other(action.side))
+      }
       else startTurn(s, other(action.side))
       return { state: s }
     }
@@ -196,6 +220,7 @@ export function act(original: GameState, action: Action): ActionResult {
       cleanup(s); return { state: s }
     }
     case 'attack': {
+      if (isPreparationTurn(s)) return fail('Båda spelarna förbereder sig. Anfall tillåts från tredje turen.')
       if (s.phase !== 'combat') return fail('Du kan bara attackera i stridsfasen.')
       const ids = [...new Set(action.attackers)]
       if (!ids.length || ids.length !== action.attackers.length || ids.some(id => !p.board.some(c => c.id === id && canAttack(c)))) return fail('Välj varelser som är redo att attackera.')

@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import * as h3 from 'h3'
 import { ACCESS_COOKIE, ACCESS_LIFETIME, accessConfiguration, accessCsrf, issueAccess, passwordMatches, verifyAccess, privateForgeEnabled } from '../server/utils/access'
@@ -8,17 +8,17 @@ import { basename, dirname, resolve, join } from 'node:path'
 import { loadDotenv } from 'c12'
 const password = 'TEST_ONLY_access_password', secret = 'TEST_ONLY_session_secret_longer_than_32_characters'
 const nativeFetch = globalThis.fetch
-const request = () => ({ matchId: crypto.randomUUID(), requestId: crypto.randomUUID(), prompt: 'En snabb liten glödvarg med hast', context: { turn:1, life:20, opponentLife:20, maxMana:1, allies:0, enemies:0 } })
+const request = () => ({ matchId: crypto.randomUUID(), requestId: crypto.randomUUID(), prompt: 'Ett kort med en stödd kombination', context: { turn:1, life:20, opponentLife:20, maxMana:1, allies:0, enemies:0 } })
 let server: Server, base: string
 function globals() { for (const [name, value] of Object.entries(h3)) vi.stubGlobal(name,value) }
 beforeAll(async () => {
   globals()
-  const [middleware, login, logout, session, mode, forge] = await Promise.all([
+  const [middleware, login, logout, session, mode, forge, confirm] = await Promise.all([
     import('../server/middleware/access'), import('../server/api/auth/login.post'), import('../server/api/auth/logout.post'),
-    import('../server/api/auth/session.get'), import('../server/api/mode.get'), import('../server/api/forge.post')
+    import('../server/api/auth/session.get'), import('../server/api/mode.get'), import('../server/api/forge.post'), import('../server/api/forge/confirm.post')
   ])
   const app = h3.createApp(), router = h3.createRouter()
-  router.post('/api/auth/login',login.default).post('/api/auth/logout',logout.default).get('/api/auth/session',session.default).get('/api/mode',mode.default).post('/api/forge',forge.default)
+  router.post('/api/auth/login',login.default).post('/api/auth/logout',logout.default).get('/api/auth/session',session.default).get('/api/mode',mode.default).post('/api/forge',forge.default).post('/api/forge/confirm',confirm.default)
   app.use(middleware.default); app.use(router)
   server = createServer(h3.toNodeListener(app)); await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
   base = `http://127.0.0.1:${(server.address() as {port:number}).port}`
@@ -85,7 +85,7 @@ describe('signed private access',()=>{
     expect(privateForgeEnabled()).toBe(true);vi.stubEnv('MURGIK_PRIVATE_FORGE','false');expect(privateForgeEnabled()).toBe(false)
   })
   it('denies anonymous access to Forge, mode, art and case/encoding variants before routing',async()=>{
-    for(const path of ['/api/mode','/api/forge','/api/art/test','/API/forge','/api/%66orge','/__nuxt_island/test']) expect((await nativeFetch(base+path)).status).toBe(401)
+    for(const path of ['/api/mode','/api/forge','/api/forge/confirm','/api/art/test','/API/forge','/api/%66orge','/__nuxt_island/test']) expect((await nativeFetch(base+path)).status).toBe(401)
     expect((await post('/api/forge',request())).status).toBe(401)
     expect((await (await nativeFetch(base+'/api/auth/session')).json()).authenticated).toBe(false)
   })
@@ -122,11 +122,11 @@ describe('signed private access',()=>{
     expect((await nativeFetch(base+'/api/mode',{headers:{Cookie:`${ACCESS_COOKIE}=${expired.cookie}`}})).status).toBe(401)
   })
   it('runs validated AI Forge after login without Redis or Turnstile calls',async()=>{
-    const {cookie,csrf}=await authenticated(), card=demoForge('quick wolf').card
+    const {cookie,csrf}=await authenticated(), card=demoForge().card
     const calls:string[]=[]
     vi.stubGlobal('fetch',async(input: RequestInfo|URL,init?: RequestInit)=>{
       const url=String(input);calls.push(url)
-      if(url==='https://api.openai.com/v1/responses') return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(card)}]}]})
+      if(url==='https://api.openai.com/v1/responses') return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({card,adaptations:[]})}]}]})
       throw new Error('Unexpected external call')
     })
     const mode=await(await nativeFetch(base+'/api/mode',{headers:{Cookie:cookie}})).json();expect(mode.mode).toBe('ai');expect(mode.privateForge).toBe(true);expect(mode.siteKey).toBeUndefined()
@@ -140,6 +140,27 @@ describe('signed private access',()=>{
     expect((await post('/api/forge',request(),{Cookie:cookie,'X-Murgik-Access-CSRF':csrf,Origin:'https://other.test'})).status).toBe(403)
     expect((await post('/api/forge',{...request(),prompt:'x'.repeat(501)},{Cookie:cookie,'X-Murgik-Access-CSRF':csrf})).status).toBe(400)
     expect(calls).not.toHaveBeenCalled()
+  })
+  it('confirms a signed preview with a server-validated name and no further AI call',async()=>{
+    const {cookie,csrf}=await authenticated(),card=demoForge().card,network=vi.fn(async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({card,adaptations:[]})}]}]}))
+    vi.stubGlobal('fetch',network)
+    const source=request(),headers={Cookie:cookie,'X-Murgik-Access-CSRF':csrf}
+    const generated=await(await post('/api/forge',source,headers)).json()
+    expect(generated.draftToken).toBeTypeOf('string')
+    vi.stubEnv('OPENAI_API_KEY','') // Confirmation is independent of all generation credentials.
+    const confirmation={token:generated.draftToken,matchId:source.matchId,name:'  Mitt egna kortnamn!  '}
+    const response=await post('/api/forge/confirm',confirmation,headers)
+    expect(response.status).toBe(200);expect((await response.json()).card).toEqual({...generated.card,name:'Mitt egna kortnamn!'})
+    expect((await post('/api/forge/confirm',confirmation,{Cookie:cookie})).status).toBe(403)
+    expect((await post('/api/forge/confirm',confirmation,{...headers,Origin:'https://other.test'})).status).toBe(403)
+    expect((await post('/api/forge/confirm',{...confirmation,name:'<script>'},headers)).status).toBe(400)
+    expect((await post('/api/forge/confirm',{...confirmation,card:{...card,cost:0}},headers)).status).toBe(400)
+    expect((await post('/api/forge/confirm',{...confirmation,matchId:crypto.randomUUID()},headers)).status).toBe(400)
+    expect((await post('/api/forge/confirm',{...confirmation,token:generated.draftToken+'x'},headers)).status).toBe(400)
+    expect((await post('/api/forge/confirm',{...confirmation,token:'x'.repeat(9000)},headers)).status).toBe(413)
+    const replays=await Promise.all([post('/api/forge/confirm',confirmation,headers),post('/api/forge/confirm',confirmation,headers)])
+    expect(replays.every(r=>r.status===200)).toBe(true);expect(network).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(await replays[0]!.json())).not.toContain(secret)
   })
   it('uses demo without an API key even for authenticated users',async()=>{
     vi.stubEnv('OPENAI_API_KEY','');const {cookie,csrf}=await authenticated();const calls=vi.fn();vi.stubGlobal('fetch',calls)

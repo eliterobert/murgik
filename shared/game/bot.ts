@@ -1,4 +1,4 @@
-import { canAttack, canBlock, canPlay, validTargets } from './engine'
+import { availableAttackers, canBlock, canPlay, validTargets } from './engine'
 import type { Action, GameState, Side } from './types'
 import { other } from './types'
 
@@ -20,7 +20,7 @@ export function botAction(s: GameState, side: Side = 'bot'): Action {
     return { type: 'resolve', side }
   }
   if (s.phase === 'main') {
-    const cards = p.hand.filter(c => canPlay(s, side, c)).sort((a, b) => {
+    const cards = p.hand.filter(c => canPlay(s, side, c) && c.effects.filter(e => e.kind === 'damage' && e.target === 'player').reduce((total,e) => total+e.amount,0) < p.life).sort((a, b) => {
       const score = (c: typeof a) => c.cost + (c.type === 'creature' ? 2 : 0) - (c.effects.some(e => e.kind === 'healPlayer') && p.life > 15 ? 10 : 0)
       return score(b) - score(a)
     })
@@ -40,7 +40,7 @@ export function botAction(s: GameState, side: Side = 'bot'): Action {
     }
   }
   if (s.phase === 'combat') {
-    const attackers = p.board.filter(canAttack).filter(a => {
+    const attackers = availableAttackers(s, side).filter(a => {
       const blockers = enemy.board.filter(b => canBlock(a, b))
       return !blockers.length || enemy.life <= a.attack || blockers.every(b => a.attack >= b.currentHealth || a.currentHealth > b.attack)
     }).map(c => c.id)

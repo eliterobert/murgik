@@ -1,7 +1,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
   modules: ['@nuxt/ui'],
-  css: ['~/assets/css/main.css', '~/assets/css/arena-v2.css', '~/assets/css/access.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/arena-v2.css', '~/assets/css/access.css', '~/assets/css/arsenal.css'],
   devtools: { enabled: false },
   app: {
     head: {

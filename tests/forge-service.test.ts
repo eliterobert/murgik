@@ -4,8 +4,8 @@ import { demoForge } from '../shared/game/forge'
 import { forgeRequestSchema } from '../shared/game/schema'
 import { act, canPlay, createGame } from '../shared/game/engine'
 
-const request = () => forgeRequestSchema.parse({ matchId: crypto.randomUUID(), requestId: crypto.randomUUID(), prompt: 'En snabb liten glödvarg med hast', context: { turn: 1, life: 20, opponentLife: 20, maxMana: 1, allies: 0, enemies: 0 } })
-const generated = async () => ({ ...demoForge('haste wolf'), mode: 'demo' as const })
+const request = () => forgeRequestSchema.parse({ matchId: crypto.randomUUID(), requestId: crypto.randomUUID(), prompt: 'Ett kort med en stödd kombination', context: { turn: 1, life: 20, opponentLife: 20, maxMana: 1, allies: 0, enemies: 0 } })
+
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 describe('server Forge transaction', () => {
   it('demo never makes a network request or needs credentials', async () => {
@@ -15,8 +15,8 @@ describe('server Forge transaction', () => {
   })
   it('validates and balances a mocked real-AI structured response', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-only-not-a-real-key')
-    const card = demoForge('dragon').card
-    const network = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(card) }] }] }) })
+    const card = demoForge().card
+    const network = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({card,adaptations:[]}) }] }] }) })
     vi.stubGlobal('fetch', network)
     const result = await generateCard(request(), 'ai')
     expect(result.card).toEqual(card); expect(result.mode).toBe('ai')
@@ -25,8 +25,8 @@ describe('server Forge transaction', () => {
   })
   it('accepts a novel combination of implemented mechanics and plays the generated card', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-only-not-a-real-key')
-    const card = { name:'Korparnas runriddare',type:'creature',flavor:'En sköld av lånade vingar.',cost:0,attack:2,health:3,keywords:['flying'],effects:[{kind:'summon',target:'none',amount:1,secondary:0,filter:'any'},{kind:'shield',target:'self',amount:1,secondary:0,filter:'any'}],artPrompt:'A raven knight with a spectral companion',theme:'void' }
-    const network = vi.fn().mockResolvedValue({ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(card)}]}]})})
+    const card = { name:'Fritt modellförslag',type:'creature',flavor:'Två egenskaper samverkar.',cost:0,attack:2,health:3,keywords:['flying'],effects:[{kind:'summon',target:'none',amount:1,secondary:0,filter:'any'},{kind:'shield',target:'self',amount:1,secondary:0,filter:'any'}],artPrompt:'An original abstract visual identity',theme:'void' }
+    const network = vi.fn().mockResolvedValue({ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({card,adaptations:[]})}]}]})})
     vi.stubGlobal('fetch',network)
     const result = await generateCard(request(),'ai')
     const state = createGame(); state.phase = 'main'; state.players.you.mana = 10; state.players.you.maxMana = 10
@@ -51,4 +51,3 @@ describe('server Forge transaction', () => {
     }
   })
 })
-

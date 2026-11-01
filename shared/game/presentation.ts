@@ -1,10 +1,11 @@
 import type { Action, Card, CardDraft, GameState, Side } from './types'
 export interface BattleEvent {
-  kind: 'attack' | 'damage' | 'heal' | 'shield' | 'death' | 'summon' | 'spell' | 'block' | 'draw' | 'forge'
+  kind: 'attack' | 'damage' | 'heal' | 'buff' | 'shield' | 'death' | 'summon' | 'spell' | 'block' | 'draw' | 'forge'
   entityId: string
   side: Side
   theme: CardDraft['theme']
   amount?: number
+  secondary?: number
   sourceId?: string
   card?: Card
 }
@@ -32,7 +33,9 @@ export function battleEvents(before: GameState, after: GameState, action: Action
         const dead = next.graveyard.find(x => x.id === c.id)
         if (dead && 'currentHealth' in dead) events.push({ kind: 'damage', entityId: c.id, side, theme, amount: c.currentHealth })
       } else {
-        const delta = survivor.currentHealth - c.currentHealth
+        const attackGain = survivor.attack - c.attack, healthGain = survivor.maxHealth - c.maxHealth
+        if (attackGain > 0 || healthGain > 0) events.push({ kind:'buff', entityId:c.id, side, theme:'forest', amount:attackGain, secondary:healthGain })
+        const delta = survivor.currentHealth - c.currentHealth - Math.max(0, healthGain)
         if (delta) events.push({ kind: delta < 0 ? 'damage' : 'heal', entityId: c.id, side, theme: delta < 0 ? theme : 'forest', amount: Math.abs(delta) })
         if (c.shield !== survivor.shield) events.push({ kind: 'shield', entityId: c.id, side, theme: 'gold' })
       }

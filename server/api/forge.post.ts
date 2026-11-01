@@ -3,7 +3,8 @@ import { ForgeError, generateCard } from '../utils/forge-service'
 import { aiConfiguration, csrfToken, readSession, safeEqual, signature, verifyChallenge } from '../utils/forge-security'
 import { QuotaStore, redisRest } from '../utils/quota-store'
 import { publicForge } from '../utils/public-forge'
-import { privateForgeEnabled, privateForgeMode, requireAccessCsrf } from '../utils/access'
+import { accessConfiguration, privateForgeEnabled, privateForgeMode, requireAccessCsrf } from '../utils/access'
+import { issueForgeDraft } from '../utils/forge-draft'
 
 export default defineEventHandler(async event => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -25,7 +26,7 @@ export default defineEventHandler(async event => {
   try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw createError({ statusCode: 400, statusMessage: 'Ogiltig JSON.' }) }
   const request = forgeRequestSchema.safeParse(body)
   if (!request.success) throw createError({ statusCode: 400, statusMessage: 'Kontrollera beskrivningen (3–500 tecken) och matchkontexten.' })
-  requireAccessCsrf(event)
+  const access = requireAccessCsrf(event)
   try {
     let result
     if (privateForgeEnabled()) {
@@ -41,7 +42,8 @@ export default defineEventHandler(async event => {
       const ipHash = signature(`ip:${ip || 'unknown'}`, config.secret!)
       result = await publicForge(request.data, sid, ipHash, new QuotaStore(redisRest(config.url!, config.token!)), () => verifyChallenge(request.data.challengeToken, config.origin!))
     }
-    return { ...result, illustration: { status: 'disabled', message: 'Originalillustration ur Murgiks bildbibliotek.' } }
+    const draftToken = issueForgeDraft(result.card, request.data.matchId, request.data.requestId, access.id, accessConfiguration()!.secret)
+    return { ...result, draftToken, illustration: { status: 'disabled', message: 'Återanvänd originalillustration; motivet kan avvika från din idé.' } }
   } catch (error) {
     if (error instanceof ForgeError) throw createError({ statusCode: error.status, statusMessage: error.message })
     throw createError({ statusCode: 503, statusMessage: 'Smedjan kunde inte bekräfta förfrågan. Inget ytterligare AI-anrop görs.' })

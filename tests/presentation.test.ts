@@ -9,8 +9,16 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 const unit = (id: string): Creature => ({ ...catalog[0]!, id, ready: true, forged: false, shield: false, stunned: false, currentHealth: 2, maxHealth: 2 })
 describe('presentation follows actual rules', () => {
+  it('shows buffs as stat gains instead of confusing extra maximum health with healing',()=>{
+    const before=createGame('buff-feedback',1);before.phase='main';before.players.you.mana=10;before.players.you.board=[unit('ally')]
+    before.players.you.hand=[{...catalog.find(c=>c.name==='Växkraft')!,id:'buff',forged:false}]
+    const action={type:'play',side:'you',cardId:'buff',targetId:'ally'} as const
+    const after=act(before,action).state,events=battleEvents(before,after,action)
+    expect(events.some(event=>event.kind==='buff'&&event.amount===1&&event.secondary===3)).toBe(true)
+    expect(events.some(event=>event.kind==='heal')).toBe(false)
+  })
   it('derives attack, damage and death feedback without mutating snapshots', () => {
-    let before = createGame(); before.phase = 'combat'; before.players.you.board = [unit('attacker')]; before.players.bot.board = []
+    let before = createGame(); before.turn = 3; before.phase = 'combat'; before.players.you.board = [unit('attacker')]; before.players.bot.board = []
     before = act(before, { type: 'attack', side: 'you', attackers: ['attacker'] }).state
     const action = { type: 'resolve', side: 'bot' } as const, after = act(before, action).state
     const copy = structuredClone(before), events = battleEvents(before, after, action)
@@ -19,7 +27,7 @@ describe('presentation follows actual rules', () => {
     expect(before).toEqual(copy)
   })
   it('derives simultaneous blocked deaths from actual graveyard results', () => {
-    let s = createGame(); s.phase = 'combat'; s.players.you.board = [unit('a')]; s.players.bot.board = [unit('b')]
+    let s = createGame(); s.turn = 3; s.phase = 'combat'; s.players.you.board = [unit('a')]; s.players.bot.board = [unit('b')]
     s.players.you.board[0]!.attack = 2; s.players.bot.board[0]!.attack = 2
     s = act(s, { type: 'attack', side: 'you', attackers: ['a'] }).state
     s = act(s, { type: 'block', side: 'bot', attackerId: 'a', blockerId: 'b' }).state
@@ -40,7 +48,7 @@ describe('presentation follows actual rules', () => {
     const game = createGame()
     expect(Object.keys(phaseLabels)).toEqual(['draw', 'main', 'combat', 'end'])
     expect(rulesChapters).toHaveLength(9); expect(game.players.you.life).toBe(20); expect(game.players.you.charges).toBe(3)
-    expect(guideCards.forged).toMatchObject({ name: 'Gnistlöpare', cost: 2, attack: 1, health: 1, keywords: ['haste'] })
+    expect(guideCards.forged).toMatchObject({ cost: 2, attack: 1, health: 1, keywords: ['haste'] })
     let s = act(game, { type: 'next', side: 'you' }).state; s.players.you.mana = 2
     s = act(s, { type: 'forge', side: 'you', card: guideCards.forged }).state
     const forged = s.players.you.hand.find(c => c.forged)!

@@ -102,6 +102,7 @@ describe('licensed sample audio', () => {
   })
   it('maps draw, damage, death and victory once per action without altering game snapshots', () => {
     const before = createGame(); before.phase = 'main'
+    before.players.you.hand[2] = { ...before.players.you.hand[2]!, type:'spell', cost:1, effects:[{kind:'damage',target:'enemy',amount:2,secondary:0,filter:'any'}] }
     const action = { type: 'play', side: 'you', cardId: before.players.you.hand[2]!.id, targetId: 'bot' } as const
     const after = act(before, action).state, original = structuredClone(before)
     const events = battleEvents(before, after, action)

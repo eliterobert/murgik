@@ -15,6 +15,6 @@ const entityId = computed(() => 'id' in props.card ? props.card.id : undefined)
     <div class="card-rules">{{ cardText(card) }}</div>
     <div v-if="!compact" class="card-flavor">{{ card.flavor }}</div>
     <div v-if="card.type === 'creature'" class="card-stats"><span><RuneIcon name="sword" :size="12"/>{{ card.attack }}</span><i/><span :class="{ wounded: unit && unit.currentHealth < unit.maxHealth }"><RuneIcon name="heart" :size="12"/>{{ unit?.currentHealth ?? card.health }}</span></div>
-    <div v-if="unit" class="unit-status"><span v-if="unit.shield" title="Sköld">◇</span><span v-if="unit.stunned">❄</span><span v-else-if="!unit.ready" title="Kan inte attackera nu">z</span><span v-for="k in card.keywords" :key="k" :title="keywordNames[k]">{{ { flying:'↟', guard:'⛨', haste:'ϟ', lifesteal:'♥' }[k] }}</span></div>
+    <div v-if="unit" class="unit-status"><span v-if="unit.shield" title="Sköld">◇</span><span v-if="unit.stunned">❄</span><span v-else-if="!unit.ready" title="Kan inte attackera nu">z</span><span v-for="k in card.keywords" :key="k" :title="keywordNames[k]">{{ { flying:'↟', guard:'⛨', haste:'ϟ', lifesteal:'♥', enrage:'↗' }[k] }}</span></div>
   </component>
 </template>
