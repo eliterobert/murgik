@@ -53,6 +53,16 @@ describe('The Living Arsenal',()=>{
       for(const side of ['you','bot'] as const){const all=[...state.players[side].hand,...state.players[side].deck];checkDeck(all.map(card=>card.baseId!));expect(new Set(all.map(card=>card.id)).size).toBe(30)}
     }
   })
+  it.each(styleIds)('starts with exactly the selected %s preset across different shuffle seeds',style=>{
+    const expected=[...presetDecks[style].cardIds].sort()
+    for(const seed of [1,42,2026]){
+      const state=createGame('selected-deck',seed,{deck:style})
+      const actual=[...state.players.you.hand,...state.players.you.deck].map(card=>card.baseId!).sort()
+      expect(state.players.you.deckStyle).toBe(style)
+      expect(actual).toEqual(expected)
+      checkDeck(actual)
+    }
+  })
   it('filters the collection by name, cost, type and playstyle together',()=>{
     expect(filterLibrary({search:'  blod ',type:'spell',mana:'1-2',style:'sacrifice'}).map(c=>c.card.name)).toEqual(['Blod för kunskap'])
     expect(filterLibrary({search:'',type:'all',mana:'all',style:'all'})).toHaveLength(80)
